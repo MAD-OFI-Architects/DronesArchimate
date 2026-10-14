@@ -170,8 +170,8 @@ Cada meta llega a al menos un componente y cada componente a al menos una meta; 
 ## Tabla de aportes
 | Integrante | Fase/Vistas | Archivos clave | Commits de referencia | Revisiones hechas |
 |---|---|---|---|---|
-| _por completar_ | | | | |
-| _por completar_ | | | | |
-| _por completar_ | | | | |
+| dishyma | Fase 0 (rol, hallazgos), Fase 1 (V02), Fase 2 (V04, contratos), Fase 3 (V07), Fase 6, modelo completo | Fase00/02, Fase00/05, Fase01/02, Fase02/01, Fase02/03, Fase02/04, Fase03/03, Fase06/, modelo/ | e6e4af2, 7d6c382, 86b3532, 1be1b45, 24318d4, e55ea28, 44b283d, 5743de4 | Revisión de coherencia V4-V8 y de Presupuesto/Diseño en Fase 4 |
+| cutiepie25 | Fase 0 (guion, conversación), Fase 1 (V01, V03), Fase 2 (ACL), Fase 3 (dominios), Fase 4 (agregados soporte), README | Fase00/01, Fase00/03, Fase00/04, Fase01/01, Fase01/03, Fase02/02, Fase03/01, Fase03/02, Fase03/04, Fase04/02, README.md | 4c82516, c7da1fd, 0c74cc5, 2358311, 7b2d1b1, a485806, 02975fe, c8f83e9 | Revisión de glosario V07 y de nombres en todas las vistas |
+| Drakuro | Fase 1 (V02c, modelo parcial), Fase 4 (agregados core), Fase 5 (contextos e interoperabilidad) | vistas/V02c*, modelo/por_fase/Fase01, Fase04/01, vistas/V06a-c, Fase05/, vistas/V08, vistas/V09 | 6f49146, 16bd8dc, d75b5f4 | Revisión de patrones de relación en V08 y de invariantes en V06 |
 
 > La tabla debe poder comprobarse en el historial de commits (rutas y mensajes que correspondan). Todos los integrantes deben conocer el diseño completo; el docente sortea quién presenta cada sección. Roles de gestión por fase (líder, revisor, verificador): por asignar.
