@@ -17,7 +17,7 @@ from pathlib import Path
 
 from . import conformance
 from .config import Config
-from .util import norm
+from .util import kebab, norm
 
 TAIL = 6000
 
@@ -256,6 +256,38 @@ def patterns_gate(cfg: Config, d) -> Gate:
     return Gate(not fails, "patrones: estructura", "\n".join(fails) or f"{len(chosen)} patrón(es) elegido(s) con su estructura presente en el código.")
 
 
+_FS_WRITE = re.compile(r"""open\([^)]*['"][wax]b?\+?['"]|File\.(?:WriteAll\w*|Create|AppendAll\w*)\s*\(|new\s+FileStream\s*\(|\.write_text\(|\.write_bytes\("""
+                       r"""|FileOutputStream|Files\.(?:write|newOutputStream)""")
+_INFRA_HOSTS = ("event-bus", "simulators", "gateway", "mongo", "postgres", "postgresql", "redis", "rabbitmq")
+
+
+def service_style_gate(cfg: Config, d, manifest: dict) -> Gate:
+    """Estilo microservicio: sin estado local y sin direcciones fijas hacia otros servicios, el bus, los simuladores o las bases.
+
+    Las direcciones llegan por variables de entorno (`BUS_URL`, `<CONTEXTO>_API_URL`, `DATABASE_URL`…): así el mismo servicio funciona
+    contra un proveedor real o simulado y se puede crear, destruir y escalar sin perder nada. Solo aplica al estilo microservicio."""
+    if d.style != "microservicio":
+        return Gate(True, "estilo microservicio", f"no aplica: el estilo es {d.style}.")
+    root = _svc(cfg, d.slug)
+    if not root.exists():
+        return Gate(True, "estilo microservicio", f"{root} todavía no existe.")
+    hosts = {x for x in _INFRA_HOSTS}
+    hosts |= {kebab(c) for c in manifest.get("domains", {}) if kebab(c) != d.slug}
+    hosts |= {kebab(s["context"]) for s in manifest.get("simulated", [])}
+    url = re.compile(r"""(?:https?|mongodb(?:\+srv)?|postgres(?:ql)?|amqp|redis)://(?:[^/@\s'"]+@)?(""" + "|".join(re.escape(h) for h in sorted(hosts, key=len, reverse=True)) + r""")\b""")
+    found = []
+    for f in conformance._files(root, _CODE_EXT):
+        rel = f.relative_to(root).as_posix()
+        if any(x in "/" + rel.lower() for x in ("/tests/", "/test/", ".tests/", "/smoke/")):
+            continue
+        text = f.read_text(encoding="utf-8", errors="ignore")
+        if _FS_WRITE.search(text):
+            found.append(f"{rel}: escribe en el disco local; el servicio debe ser sin estado (usa la base, la caché externa o el bus).")
+        for m in url.finditer(text):
+            found.append(f"{rel}: dirección fija hacia «{m.group(1)}»; léela de una variable de entorno.")
+    return Gate(not found, "estilo microservicio", "\n".join(dict.fromkeys(found)) or "sin estado local ni direcciones fijas hacia otros servicios.")
+
+
 def _is_local(root: Path, top: str) -> bool:
     return any((root / base / top).exists() or (root / base / f"{top}.py").exists() for base in ("", "src"))
 
@@ -307,7 +339,7 @@ def build_gates(cfg: Config, d, layers: set[str] | None, label: str) -> list[Gat
     # El cableado se exige donde se ensamblan los adaptadores (etapa de adaptadores): antes, los esqueletos sembrados en S02
     # (p. ej. la mensajería durable) todavía no tienen composition root y no deben fallar las capas de dominio/aplicación.
     if layers is None or "infrastructure" in layers:
-        g += [wiring_gate(cfg, d), patterns_gate(cfg, d)]
+        g += [wiring_gate(cfg, d), patterns_gate(cfg, d), service_style_gate(cfg, d, m)]
     g += [solid_gate(cfg, d)]
     return g
 

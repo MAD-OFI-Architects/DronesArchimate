@@ -1,0 +1,6 @@
+#### Estilo monolito modular
+- **Un despliegue, un módulo por agregado raíz.** Cada módulo es cohesivo: sus comandos, sus reglas y su persistencia.
+- **Fachadas**: cada módulo expone `I<Raiz>Modulo` en `contracts`; los módulos se hablan solo por esas fachadas o por eventos en proceso, nunca por clases internas.
+- **Datos**: un módulo no lee ni escribe las tablas o colecciones de otro.
+- **Registro**: `{{ d.prefix }}Modulos` (capa api) los registra; no hay red entre módulos.
+- **Extraíble**: cualquier módulo debe poder convertirse en servicio propio cambiando solo su fachada por un cliente.

@@ -20,6 +20,13 @@ modelo y tokens de API), **Construir** (progreso por etapa y log en vivo) y **En
 - Límite honesto: un `.archimate` ajeno solo sirve si sigue las convenciones de modelado de ArchiForge (agregados con rol Raíz, «Dominio: …», comandos y
   eventos). La TUI lo comprueba y explica qué falta; desacoplar el generador de este modelo concreto es trabajo pendiente.
 
+## Guías de construcción
+Cada decisión que tomas se traduce en reglas concretas para quien construye el servicio (el agente) y para quien lo revisa:
+la **arquitectura** (`clean-ddd` o `hexagonal`), el **estilo** (`microservicio`, `soa` o `monolito-modular`) y **SOLID** se inyectan en las órdenes de
+trabajo de dominio, aplicación, adaptadores y revisión (`prompts/guias/`). Lo marcado *[verificado]* lo comprueban las puertas automáticas
+(dependencias por capa, SOLID, cableado, estructura de los patrones elegidos y, en microservicio, ausencia de estado local y de direcciones fijas).
+Los patrones que elijas llevan además su estructura canónica y el lugar donde los aplicas (`forge patterns <id>` muestra la ficha).
+
 ## Flujo por comandos (3 pasos por dominio)
 1. **Diseñar** (conversación con el agente): en Claude Code `/forge-design "Intervenciones"`; en OpenCode igual.
    El agente te pregunta cada decisión sin opinar (el catálogo se ve con `forge patterns`) y guarda `decisiones/<dominio>.toml`.

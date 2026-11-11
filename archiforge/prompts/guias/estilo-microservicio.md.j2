@@ -1,0 +1,10 @@
+#### Estilo microservicio
+- **Una capacidad de negocio por servicio**: este servicio es el contexto delimitado «{{ d.context }}»; no absorbe agregados de otros contextos.
+- **Base de datos propia**: solo este servicio lee y escribe su almacén (el compose le da el suyo). Los demás contextos obtienen datos por eventos o por API, nunca por la base.
+- **Sin estado local** [verificado]: no guardes sesiones ni escribas en el disco del servicio. El estado vive en la base, en la caché externa o en el bus, para poder crear, destruir y escalar el contenedor sin perder nada.
+- **Comunicación**: eventos por el bus para reaccionar a hechos (asíncrono: aísla fallos); API síncrona solo para consultas que exigen respuesta inmediata. La dirección de otro servicio llega SIEMPRE por variable de entorno, nunca escrita en el código [verificado: sin URLs fijas hacia otros servicios, el bus, los simuladores ni las bases].
+- **Inteligencia en los extremos**: el bus solo transporta; la lógica, la idempotencia y la traducción viven en el servicio.
+- **Tolerancia a fallos**: toda llamada externa lleva tiempo máximo; reintenta solo operaciones idempotentes; el fallo de otro contexto no debe tumbar este servicio (responde con errores claros sin quedarse esperando).
+- **Contratos versionados**: eventos `…V1`; para cambiar uno, añade campos o crea la V2, nunca rompas la V1.
+- **Despliegue**: contenedor (Dockerfile), `GET /health` y configuración solo por entorno.
+- **API pública y privada**: lo que consumen los clientes sale por el gateway (`/api/...`); entre servicios se usan las variables `<CONTEXTO>_API_URL`.

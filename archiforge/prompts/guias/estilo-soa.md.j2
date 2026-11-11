@@ -1,0 +1,8 @@
+#### Estilo SOA
+- **Contrato primero**: escribe `openapi.yaml` ANTES del código (entradas, salidas, errores y requisitos no funcionales) y mantenlo coherente con las rutas. Para cambiar un contrato añade campos; no los modifiques.
+- **Tres piezas separadas**: Service Contract (mensajes canónicos/DTO en `contracts`), Service Interface (los puertos que describen las operaciones) y Service Implementation (los manejadores).
+- **Servicio sin estado y encapsulado**: el cliente lo ve como una caja negra y no conoce su lógica interna.
+- **Orquestación**: `Orquestador{{ d.prefix }}` (capa application) coordina las llamadas a otros servicios mediante sus puertos (clientes), sin reglas de negocio propias; el flujo completo se lee en un solo lugar.
+- **Dependencias invertidas**: los consumidores dependen de interfaces; las implementaciones se registran solo en el composition root.
+- **Estilos de comunicación**: síncrono donde hace falta respuesta inmediata; mensajería asíncrona para operaciones largas, fiabilidad o desacoplamiento. Considera latencia, reintentos, idempotencia y orden.
+- **Catálogo** [verificado: el archivo existe]: documenta en `catalogo-de-servicios.md`, en la raíz del servicio, cada servicio que expones o consumes: propietario, versión, operaciones y contrato.

@@ -1,0 +1,11 @@
+#### Arquitectura hexagonal (puertos y adaptadores)
+- **Adentro y afuera**: el núcleo (`domain` + `application`) no conoce ninguna tecnología. Todo lo externo se trata igual: se entra y se sale solo por puertos.
+- **Puertos de entrada** (lo que el servicio ofrece): {% if d.uses('cqrs') %}comandos y consultas, y el mediador es la puerta. Un adaptador NUNCA llama directo al manejador: se saltaría la validación, el registro y la transacción del pipeline.{% else %}las operaciones de los casos de uso (un manejador por comando).{% endif %}
+
+- **Puertos de salida** (lo que el servicio necesita del exterior: persistencia, bus, otras APIs, cifrado, caché, reloj): interfaces o protocolos declarados en `application` (el repositorio del agregado, en `domain`). Jamás dentro de `adapters`.
+- **Adaptadores primarios** (conducen al servicio: HTTP, consumidores de eventos): viven en `adapters/inbound`. Solo traducen: reciben, validan la forma, construyen el comando y lo envían. Sin reglas de negocio.
+- **Adaptadores secundarios** (el servicio los conduce: persistencia, bus, ACL, cifrado, caché): viven en `adapters/outbound` y cada uno implementa un puerto de salida. Sobre un mismo puerto pueden convivir varios (uno en memoria para pruebas y otro real); cambiar de adaptador no toca el núcleo.
+- **Las dependencias apuntan hacia adentro** [verificado]: `domain` no importa nada de afuera, `application` no importa `adapters`, y los adaptadores dependen del núcleo, nunca al revés.
+- **Un solo punto de ensamblado** (composition root, en `adapters/inbound`): ahí se construyen los adaptadores y se inyectan por constructor. Nada más instancia un adaptador concreto, y todo adaptador definido debe usarse [verificado: cableado].
+- **Pruebas**: el núcleo se prueba con adaptadores en memoria, sin base de datos, bus ni HTTP. Las pruebas de dominio no cambian al cambiar un adaptador.
+- **Sin abstracciones de más**: un puerto por conversación con propósito, no uno por clase; no encadenes capas que solo delegan.

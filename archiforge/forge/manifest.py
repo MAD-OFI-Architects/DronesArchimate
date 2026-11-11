@@ -171,6 +171,7 @@ def build_manifest(ir: dict, domains: list[Domain]) -> dict:
         if d.style == "soa":      # SOA: servicio de grano grueso con contrato explícito y orquestación
             items.append(_item(d, "soa_orchestrator", "application", f"Orquestador{P}", d.context))
             items.append(_item(d, "file", "ops", "contrato-servicio", glob="openapi.yaml|openapi.yml|openapi.json"))
+            items.append(_item(d, "file", "ops", "catalogo-de-servicios", glob="catalogo-de-servicios.md"))
         if d.style == "monolito-modular":
             items.append(_item(d, "module_registry", "api", f"{P}Modulos", d.context))
         items.append(_item(d, "file", "ops", "Dockerfile", glob="Dockerfile"))

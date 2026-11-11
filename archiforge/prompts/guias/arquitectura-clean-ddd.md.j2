@@ -1,0 +1,8 @@
+#### Clean Architecture + DDD
+- **Anillos**: Domain → Application → Infrastructure / Api. Cada capa depende solo de las de adentro [verificado: referencias entre proyectos o imports].
+- **Domain**: las invariantes viven dentro del agregado; la raíz levanta los eventos; los objetos de valor son inmutables; sin frameworks ni entrada/salida. Los agregados se referencian entre sí solo por identidad.
+- **Application**: un manejador por comando o consulta; orquesta y no decide reglas; recibe por constructor sus puertos (repositorios, bus, reloj); devuelve DTO, nunca el agregado.
+- **Infrastructure**: implementa los puertos declarados en Application/Domain (persistencia, bus, ACL, cifrado, caché); sin reglas de negocio; traduce entre el modelo del dominio y el almacenamiento.
+- **Api**: delgada. Valida la forma, construye el comando, lo envía por el mediador y traduce los errores a ProblemDetails. Sin lógica de negocio.
+- **Contracts**: eventos e integración versionados (`…V1`) y autocontenidos.
+- El composition root (Api) es el único lugar que conoce todas las capas; todo adaptador definido debe usarse [verificado: cableado].
