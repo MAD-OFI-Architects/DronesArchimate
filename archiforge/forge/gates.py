@@ -510,3 +510,44 @@ def portfolio_gates(cfg: Config, built: list, all_contexts: list[str]) -> list[G
                       else (f"Se simula un dominio que ya es real: {', '.join(sorted(overlap))}." if overlap
                             else f"{len(simulated)} contexto(s) simulado(s): {', '.join(sorted(simulated))}.")))
     return gates
+
+
+# ------------------------------------------------------------------ Interconexión síncrona (APIs entre contextos)
+_CODE_EXT = {".cs", ".py", ".java"}
+
+
+def _source_text(root: Path) -> str:
+    return "\n".join(f.read_text(encoding="utf-8", errors="ignore") for f in conformance._files(root, _CODE_EXT)
+                     if "/tests/" not in "/" + f.relative_to(root).as_posix().lower() and "/smoke/" not in f.as_posix())
+
+
+def interconnect_gates(cfg: Config, ir: dict, built: list) -> list[Gate]:
+    """Que las llamadas síncronas entre servicios reales lleguen de verdad al servicio real, y no al simulador.
+
+    - Consumidor: su código debe leer `<PROVEEDOR>_API_URL`. Si solo conoce `SIMULATORS_URL`, seguirá llamando al simulador
+      aunque el proveedor ya exista (hay que reconstruir su etapa de adaptadores).
+    - Proveedor: debe exponer `/api/<operación>`, la ruta que el contrato síncrono promete a sus consumidores.
+    """
+    from . import interconexion
+    real = {d.context: d for d in built}
+    links = interconexion.sync_links(ir)
+    bad_consumers, bad_providers = [], []
+    for l in links:
+        if l["upstream"] in real and l["downstream"] in real:
+            c = real[l["downstream"]]
+            if l["env"] not in _source_text(_svc(cfg, c.slug)):
+                bad_consumers.append(f"{c.context} llama a {l['upstream']} pero su código no lee {l['env']} (sigue apuntando al simulador): "
+                                     "reconstruye su etapa de adaptadores (S13).")
+    for l in links:
+        if l["upstream"] in real and l["explicit"]:
+            p = real[l["upstream"]]
+            route = f"/api/{l['slug']}"
+            if route not in _source_text(_svc(cfg, p.slug)):
+                bad_providers.append(f"{p.context} no expone {route} (la usa {l['downstream']}).")
+    uniq = lambda xs: list(dict.fromkeys(xs))  # noqa: E731
+    pairs = len({(l["downstream"], l["upstream"]) for l in links if l["upstream"] in real and l["downstream"] in real})
+    return [Gate(not bad_consumers, "interconexión: consumidores usan la URL del proveedor",
+                 "\n".join(uniq(bad_consumers)) or (f"{pairs} llamada(s) síncrona(s) entre servicios reales resueltas por variable de entorno." if pairs
+                                                    else "ningún proveedor síncrono es real todavía: todo pasa por simuladores.")),
+            Gate(not bad_providers, "interconexión: proveedores exponen la ruta del contrato",
+                 "\n".join(uniq(bad_providers)) or "todos los proveedores reales exponen sus rutas de API síncrona.")]

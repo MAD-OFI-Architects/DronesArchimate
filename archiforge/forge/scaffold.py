@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from . import eventcontracts
+from . import eventcontracts, interconexion
 from .config import Config
 from .util import kebab, pascal
 
@@ -71,13 +71,19 @@ def contract_doc(ir: dict, cfg: Config, manifest: dict, bt: dict) -> str:
     for t in bt["topics"]:
         L += ["", f"### `{t['topic']}`", "Campos del `payload`:", "```json", json.dumps(t["payload"], indent=2, ensure_ascii=False),
               "```", "Ejemplo:", "```json", json.dumps(t["sample"], indent=2, ensure_ascii=False), "```"]
-    L += ["", "## APIs síncronas hacia contextos simulados (capa anticorrupción)", "",
-          "| Servicio | Contexto proveedor | Ruta (simulador) | Mecanismo del modelo |", "|---|---|---|---|"]
+    L += ["", "## APIs síncronas entre contextos (capa anticorrupción)", "",
+          "El consumidor lee `<PROVEEDOR>_API_URL` y llama a `<URL>/<operación>`; el compose decide si esa URL es el servicio real del proveedor "
+          "o su simulador, así que el consumidor no cambia cuando el proveedor se construye.", "",
+          "| Consumidor | Proveedor | Estado del proveedor | Variable de entorno | Llamada |", "|---|---|---|---|---|"]
+    real_ctx = {d.context for d in cfg.domains}
     for ctx_name, info in manifest["domains"].items():
         for a in info["acl"]:
-            L.append(f"| {ctx_name} | {a['upstream']} | `/api/{kebab(a['upstream'])}/{a['slug']}` (GET o POST) | {a['mechanism']} |")
-    L += ["", f"El gateway (`http://localhost:{GATEWAY_PORT}`) expone: `/api/<servicio>/…` → servicios reales, `/sim/…` → simuladores. "
-          "Dentro de la red de Docker los servicios llaman al simulador en `http://simulators:" + str(SIM_PORT) + "`.", ""]
+            estado = "real" if a["upstream"] in real_ctx else "simulado"
+            L.append(f"| {ctx_name} | {a['upstream']} | {estado} | `{a['env']}` | `POST {{{a['env']}}}/{a['slug']}` · {a['mechanism']} |")
+    L += ["", "Un proveedor **real** debe exponer `POST /api/<operación>` para cada operación con nombre que declara el modelo; un proveedor "
+          "simulado la sirve en `/api/<contexto>/<operación>` del simulador.", "",
+          f"El gateway (`http://localhost:{GATEWAY_PORT}`) expone: `/api/<servicio>/…` → servicios reales, `/sim/…` → simuladores. "
+          "Dentro de la red de Docker cada servicio recibe sus URL por variables de entorno.", ""]
     return "\n".join(L)
 
 
@@ -230,7 +236,7 @@ CMD ["python", "{script}"]
 '''
 
 
-def _compose(cfg: Config, bt: dict, services_rel: str, with_frontend: bool) -> tuple[str, str]:
+def _compose(cfg: Config, bt: dict, services_rel: str, with_frontend: bool, ir: dict | None = None) -> tuple[str, str]:
     """(docker-compose.yml, init-postgres.sql). services_rel: ruta de los servicios respecto al compose."""
     from .manifest import service_env
     py_hc = ('["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen(\'http://localhost:%d/health\')"]')
@@ -246,7 +252,7 @@ def _compose(cfg: Config, bt: dict, services_rel: str, with_frontend: bool) -> t
     L += [f"  event-bus:\n    build: ./event-bus\n    environment:\n      PORT: \"{BUS_PORT}\"\n      TOPICS_FILE: /app/topics.json\n    healthcheck:\n      test: {py_hc % BUS_PORT}\n      interval: 5s\n      timeout: 5s\n      retries: 20",
           f"  simulators:\n    build: ./simulators\n    environment:\n      PORT: \"{SIM_PORT}\"\n      BUS_URL: http://event-bus:{BUS_PORT}\n    depends_on:\n      event-bus:\n        condition: service_healthy\n    healthcheck:\n      test: {py_hc % SIM_PORT}\n      interval: 5s\n      timeout: 5s\n      retries: 20"]
     for d in cfg.domains:
-        env = service_env(d, BUS_PORT, SIM_PORT)
+        env = service_env(d, BUS_PORT, SIM_PORT, api_urls=interconexion.api_urls(ir, d, cfg.domains, SIM_PORT) if ir else None)
         dep = "mongo" if d.database == "mongodb" else "postgres"
         L.append(f"  {d.slug}:\n    build: {services_rel}/{d.slug}\n    environment:\n" + "\n".join(f'      {k}: "{v}"' for k, v in env.items()) +
                  f"\n    depends_on:\n      {dep}:\n        condition: service_healthy\n      event-bus:\n        condition: service_healthy")
@@ -572,6 +578,8 @@ def platform(cfg: Config, ir: dict, manifest: dict, target: Path, services_rel: 
                               "topic": t["topic"], "sample": t["sample"]})
     for ctx_name, info in manifest["domains"].items():
         for ac in info["acl"]:
+            if ac.get("upstream_real"):
+                continue          # el proveedor es un servicio real: no se simula
             e = {"context": ac["upstream"], "context_slug": kebab(ac["upstream"]), "operation": ac["name"], "operation_slug": ac["slug"]}
             if e not in apis:
                 apis.append(e)
@@ -580,7 +588,7 @@ def platform(cfg: Config, ir: dict, manifest: dict, target: Path, services_rel: 
     files["simulators/Dockerfile"] = PY_DOCKER.format(script="simulators.py")
     files["simulators/README.md"] = ("# Simuladores de los contextos no implementados\n\n" +
                                      "\n".join(f"- **{s['context']}**: emite {s['emits'] or '—'}, se suscribe a {s['subscribes'] or '—'}, APIs {s['sync_apis'] or '—'}" for s in manifest["simulated"]) + "\n")
-    compose, sql = _compose(cfg, bt, services_rel, with_frontend)
+    compose, sql = _compose(cfg, bt, services_rel, with_frontend, ir)
     files["docker-compose.yml"], files["init-postgres.sql"] = compose, sql
     files["nginx.conf"] = _nginx(cfg)
     for rel, text in files.items():

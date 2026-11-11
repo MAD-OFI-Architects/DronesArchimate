@@ -246,6 +246,7 @@ def cmd_assemble(cfg: config.Config, a) -> int:
     results += [G.npm_build(cfg2, "frontend/mfe-shell")] + [G.npm_build(cfg2, f"frontend/{p.parent.name}") for p in sorted((out / "frontend").glob("mfe-*/mfe.json"))]
     if "smoke" not in cfg.raw.get("quality", {}).get("skip", []):
         results.append(G.smoke_assembled_gate(cfg2, built))
+    results += G.interconnect_gates(cfg2, ir, built)
     if cfg.raw.get("quality", {}).get("enforce_evaluation", True):
         results += G.portfolio_gates(cfg2, built, [c["name"] for c in ir["contexts"]])
     fallos = []

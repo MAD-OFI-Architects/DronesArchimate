@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 
+from . import interconexion
 from .config import Domain
 from .util import kebab, pascal
 
@@ -19,11 +20,12 @@ def _item(domain: Domain, kind: str, layer: str, name: str, trace: str = "", req
             "kind": kind, "layer": layer, "name": name, "trace": trace, "required": required, **extra}
 
 
-def service_env(d: Domain, bus: int = 5100, sim: int = 5110) -> dict:
+def service_env(d: Domain, bus: int = 5100, sim: int = 5110, api_urls: dict[str, str] | None = None) -> dict:
     """Contrato de variables de entorno de un servicio (lo fija el orquestador; el servicio las LEE, no las inventa)."""
     db = d.slug.replace("-", "_")
     env = {"PORT": str(d.port), "BUS_URL": f"http://event-bus:{bus}", "SIMULATORS_URL": f"http://simulators:{sim}",
            "CIFRADO_CLAVE": "ZGV2LWtleS0zMi1ieXRlcy1sb25nLWZvci1hZXMtMjU2ISE="}   # clave de desarrollo en base64 (32 bytes)
+    env.update(api_urls or {})        # <PROVEEDOR>_API_URL: real o simulado según el ensamblado (SIMULATORS_URL se conserva por compatibilidad)
     if d.database == "mongodb":
         env["MONGO_URL"] = f"mongodb://mongo:27017/{d.slug}?replicaSet=rs0"
         if d.language == "java":
@@ -146,10 +148,12 @@ def build_manifest(ir: dict, domains: list[Domain]) -> dict:
         # ---------------- ACL hacia contextos simulados (síncronos / API) ----------------
         acl = []
         for r in ir["context_relations"]:
-            if d.uses("acl") and r["downstream"] == d.context and r["upstream"] not in real and r["upstream"] in ctx \
+            # El ACL se genera para TODO proveedor síncrono: si ya es real, la URL cambia (compose), el adaptador no.
+            if d.uses("acl") and r["downstream"] == d.context and r["upstream"] in ctx \
                     and (r["sync"].startswith("Síncrono") or r["mechanism"].startswith("API")):
                 nm = acl_name(r["mechanism"])
-                acl.append({"name": nm, "slug": kebab(acl_text(r["mechanism"])), "upstream": r["upstream"], "mechanism": r["mechanism"], "sync": r["sync"]})
+                acl.append({"name": nm, "slug": kebab(acl_text(r["mechanism"])), "upstream": r["upstream"], "mechanism": r["mechanism"],
+                            "sync": r["sync"], "env": interconexion.env_var(r["upstream"]), "upstream_real": r["upstream"] in real})
                 items.append(_item(d, "acl_port", "application", f"I{nm}", r["upstream"]))
                 items.append(_item(d, "acl_adapter", "infrastructure", f"{nm}Adapter", r["upstream"]))
 
@@ -187,9 +191,14 @@ def build_manifest(ir: dict, domains: list[Domain]) -> dict:
                 items.append(_item(d, "route", "api", f"/api/{seg}" if first else kebab(cname), cm["id"], mode="text"))
                 first = False
             routes.append({"method": "GET", "path": f"/api/{seg}/{{id}}", "command": None, "roles": []})
+        # contrato síncrono: lo que OTROS contextos (reales o simulados) le piden a este servicio por API
+        provided = [l for l in interconexion.sync_links(ir) if l["upstream"] == d.context and l["explicit"]]
+        for slug_ in dict.fromkeys(l["slug"] for l in provided):
+            items.append(_item(d, "route", "api", f"/api/{slug_}", mode="text"))
         domain_info[d.context] = {
             "slug": d.slug, "language": d.language, "architecture": d.architecture, "style": d.style, "database": d.database,
-            "port": d.port, "patterns": sorted(p for p in d.patterns if d.uses(p)), "env": service_env(d),
+            "port": d.port, "patterns": sorted(p for p in d.patterns if d.uses(p)),
+            "env": service_env(d, api_urls=interconexion.api_urls(ir, d, domains)), "provides": [{"slug": sl, "consumers": sorted({x["downstream"] for x in provided if x["slug"] == sl})} for sl in dict.fromkeys(l["slug"] for l in provided)],
             "aggregates": c["aggregates"], "commands": [x["name"] for x in cmds],
             "published_events": c["published_events"], "consumed": consumed_map, "acl": acl, "routes": routes,
             "business_rules": rules,

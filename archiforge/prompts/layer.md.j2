@@ -48,7 +48,10 @@ Sigue los roles y sufijos de la guía del profesor (`reference/guia_ddd.md`): `�
 {% endif %}
 {% if d.uses('eventos') %}- **Eventos**: `PublicadorDeEventosHttp` (`POST {BUS_URL}/publish`){% if d.uses('outbox') %}, `BandejaDeSalida` (despachador con reintentos) y `ProcesadorDeMensajeEntrante` (idempotente por `eventId`){% endif %}; el endpoint `POST /events/{topic}` recibe del bus y entrega al consumidor correspondiente.
 {% endif %}
-{% if d.uses('acl') %}- **ACL**: adaptadores `…Adapter` (HTTP al simulador del contexto externo con timeout y mapeo anticorrupción: el dominio no ve el formato externo).
+{% if d.uses('acl') %}- **ACL**: adaptadores `…Adapter` (HTTP al contexto proveedor con timeout y mapeo anticorrupción: el dominio no ve el formato externo). **La URL base llega SIEMPRE por la variable de entorno del proveedor, nunca fija ni por `SIMULATORS_URL`**: el adaptador llama a `<URL>/<operación>` y no sabe si al otro lado hay un servicio real o un simulador.
+{% for a in info.acl %}  - `{{ a.name }}Adapter` → variable `{{ a.env }}`, llamada `POST {{ '{' }}{{ a.env }}{{ '}' }}/{{ a.slug }}` ({{ a.upstream }}{% if a.upstream_real %}, ya es un servicio real{% else %}, hoy simulado{% endif %}).
+{% endfor %}{% for p in info.provides %}- **Contrato síncrono que este servicio ofrece**: expón `POST /api/{{ p.slug }}` (cuerpo y respuesta JSON); lo usan {{ p.consumers | join(', ') }}.
+{% endfor %}
 {% endif %}
 - **API HTTP**: `{{ d.prefix }}Endpoints`, una `…Solicitud` por comando (cuerpo validado), las **rutas** de la tabla (`POST /api/<agregado>` crea; `POST /api/<agregado>/{id}/<comando>`; `GET /api/<agregado>/{id}`), `GET /health`, errores como `application/problem+json` (regla rota 422, no encontrado 404, validación 400), y `{{ d.prefix }}Composicion` (único lugar que conoce todas las capas). Puerto **{{ d.port }}**.
 {% if d.style == 'monolito-modular' %}- `{{ d.prefix }}Modulos` registra los módulos y sus fachadas.
