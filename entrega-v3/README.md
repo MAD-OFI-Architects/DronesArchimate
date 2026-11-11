@@ -48,6 +48,14 @@ Apagar:
 docker compose down -v
 ```
 
+## Datos de demostración
+
+```bash
+python3 seed/seed.py
+```
+
+Carga por la API 8 repuestos, 3 solicitudes de reposición y 6 órdenes de trabajo en seis estados distintos (dos de ellas nacen por evento, para ver la integración entre servicios). Es idempotente. Detalle en [`seed/README.md`](seed/README.md).
+
 ## Smoke tests
 
 Con la plataforma levantada:

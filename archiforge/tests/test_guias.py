@@ -147,6 +147,7 @@ def test_scaffolded_frontend_ships_hint_styles_and_a_stub_that_satisfies_the_hin
 def test_prompt_and_stage_require_hints():
     text = (TOOL / "prompts" / "mfe.md.j2").read_text(encoding="utf-8")
     assert "Ayudas (obligatorias)" in text and "aria-describedby" in text and "fuera** del `<label>`" in text
+    assert "coincidir con lo que el servicio realmente valida" in text and "valide el mismo rango" in text
     import inspect
     from forge import cli, stages
     assert "hints_gate" in inspect.getsource(stages.build_stages) and "hints_gate" in inspect.getsource(cli.cmd_assemble)

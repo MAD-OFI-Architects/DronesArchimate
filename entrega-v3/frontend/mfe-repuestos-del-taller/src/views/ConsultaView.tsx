@@ -37,7 +37,7 @@ export function ConsultaView({ titulo, etiqueta, ruta, ayuda }: ConsultaViewProp
 }
 
 const ETIQUETAS: Record<string, string> = {
-  referencia: 'Referencia', cantidad: 'Cantidad', stock_minimo: 'Stock mínimo',
+  referencia: 'Referencia', fisica: 'Existencia física', cantidad: 'Cantidad', stock_minimo: 'Stock mínimo',
   plazo_dias: 'Plazo de reposición (días)', disponible: 'Disponible', reservado: 'Reservado',
   estado: 'Estado', solicitud_id: 'Solicitud', orden_trabajo_id: 'Orden de trabajo',
   monto: 'Monto', nivel_aprobacion: 'Nivel de aprobación', cantidad_solicitada: 'Cantidad solicitada',

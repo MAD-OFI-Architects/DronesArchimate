@@ -9,12 +9,14 @@ export interface Campo {
   tipo: TipoDeCampo;
   obligatorio?: boolean;
   min?: number;
+  max?: number;
   paso?: string;
   /** Ayuda corta bajo el campo: qué se escribe, formato y un ejemplo. */
   ayuda?: string;
 }
 type Valor = string | boolean;
 
+export const AYUDA_ID_ORDEN_CORTA = 'GUID de la orden; cópialo de la consulta de arriba.';
 export const AYUDA_ID_ORDEN = 'Identificador (GUID) de la orden de trabajo, p. ej. 3f2b8c1e-5a47-4d0e-9c1b-7a6e2d4f8b90. Lo ves en la consulta de órdenes o en la respuesta al abrirla.';
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const BASE = '/api/intervenciones/orden-de-trabajo';
@@ -27,6 +29,7 @@ function validar(campo: Campo, valor: Valor): string | null {
     const n = Number(texto);
     if (Number.isNaN(n)) return `${campo.etiqueta} debe ser un número.`;
     if (campo.min !== undefined && n < campo.min) return `${campo.etiqueta} debe ser al menos ${campo.min}.`;
+    if (campo.max !== undefined && n > campo.max) return `${campo.etiqueta} debe ser como máximo ${campo.max}.`;
   }
   if (campo.tipo === 'fecha-hora' && Number.isNaN(new Date(texto).getTime())) return `${campo.etiqueta} no es una fecha válida.`;
   return null;
@@ -96,7 +99,7 @@ export function CommandForm({ titulo, segmento, descripcion, campos, identificad
         <label className="field">Identificador de la orden
           <input aria-invalid={errores.some((error) => error.includes('identificador'))} aria-describedby={`${uid}-orden`} value={ordenId} onChange={(e) => setOrdenId(e.target.value)} />
         </label>
-        <small className="hint" id={`${uid}-orden`}>{AYUDA_ID_ORDEN}</small>
+        <small className="hint" id={`${uid}-orden`}>{AYUDA_ID_ORDEN_CORTA}</small>
       </div>
       {campos.map((c) => c.tipo === 'si-no' ? (
         <div className="campo" key={c.nombre}>
@@ -114,6 +117,7 @@ export function CommandForm({ titulo, segmento, descripcion, campos, identificad
               aria-describedby={c.ayuda ? `${uid}-${c.nombre}` : undefined}
               type={c.tipo === 'numero' ? 'number' : c.tipo === 'fecha-hora' ? 'datetime-local' : 'text'}
               min={c.min}
+              max={c.max}
               step={c.paso}
               value={String(valores[c.nombre] ?? '')}
               onChange={(e) => setValores({ ...valores, [c.nombre]: e.target.value })}
