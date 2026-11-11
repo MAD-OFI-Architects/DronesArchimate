@@ -14,7 +14,7 @@ archiforge/
 ├── decisiones/           decisiones de arquitectura de los dos dominios
 ├── config/               contratos de payload de eventos
 ├── reference/            guía DDD y material de la evaluación
-├── inputs/DronesArchimate/  copia del modelo y documentos usados como entrada
+├── (el diseño ArchiMate vive en ../modelo y ../Fase0N: una sola copia, sin duplicar)
 ├── tests/                pruebas del generador
 ├── forge.toml            configuración OpenCode
 └── forge.claude.toml     configuración Claude Code

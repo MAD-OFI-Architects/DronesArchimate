@@ -17,8 +17,8 @@ from forge.manifest import build_manifest  # noqa: E402
 from forge.stages import build_stages, agent_for  # noqa: E402
 from forge.util import kebab, norm, pascal  # noqa: E402
 
-ARCHI = ROOT / "inputs/DronesArchimate/modelo/drones-mantenimiento.archimate"
-DOCS = ROOT / "inputs/DronesArchimate"
+ARCHI = ROOT.parent / "modelo/drones-mantenimiento.archimate"
+DOCS = ROOT.parent
 ALL = {"cqrs": {"usar": True}, "memento": {"usar": True}, "cache": {"usar": True}, "cifrado": {"usar": True},
        "outbox": {"usar": True}, "eventos": {"usar": True}, "acl": {"usar": True}, "state": {"usar": True}}
 
@@ -215,6 +215,8 @@ def test_dryrun_end_to_end_with_fake_agent(tmp_path):
     """Python + hexagonal: decide → build (agente simulado) → 100 % conformidad, ADR verificado."""
     import shutil
     work = tmp_path / "w"
+    for d in ("modelo", *(f"Fase0{i}" for i in range(1, 7))):        # el diseño vive junto a la herramienta (../modelo, ../Fase0N)
+        shutil.copytree(ROOT.parent / d, tmp_path / d)
     shutil.copytree(ROOT, work, ignore=shutil.ignore_patterns("out*", ".forge*", "decisiones_dryrun", ".git", "__pycache__", ".claude", ".opencode", ".pytest_cache"))
     run = lambda *a: subprocess.run([sys.executable, "-m", "forge", "-c", "forge.dryrun.toml", *a], cwd=work, capture_output=True, text=True)  # noqa: E731
     r = run("decide", "Repuestos del Taller", "--lang", "python", "--arch", "hexagonal", "--style", "microservicio", "--db", "postgresql",

@@ -69,7 +69,7 @@ def test_project_outside_the_tool_root_still_finds_catalog_prompts_and_guide(tmp
     tool = Path(__file__).resolve().parents[1]
     proj = tmp_path / "mi-proyecto"
     proj.mkdir()
-    (proj / "forge.toml").write_text(f'[inputs]\narchimate = "{tool}/inputs/DronesArchimate/modelo/drones-mantenimiento.archimate"\n'
+    (proj / "forge.toml").write_text(f'[inputs]\narchimate = "{tool.parent}/modelo/drones-mantenimiento.archimate"\n'
                                      '[output]\ndir = "out"\n[decisions]\ndir = "decisiones"\n', encoding="utf-8")
     cfg = config.load(proj / "forge.toml")
     assert cfg.root == proj and cfg.tool_root == tool

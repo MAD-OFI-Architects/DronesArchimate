@@ -11,8 +11,8 @@ from forge.credentials import CredentialStore  # noqa: E402
 from forge.studio import model, projects, service  # noqa: E402
 
 TOOL = Path(__file__).resolve().parents[1]
-ARCHIMATE = TOOL / "inputs/DronesArchimate/modelo/drones-mantenimiento.archimate"
-DOCS = TOOL / "inputs/DronesArchimate"
+ARCHIMATE = TOOL.parent / "modelo/drones-mantenimiento.archimate"
+DOCS = TOOL.parent
 
 
 @pytest.fixture

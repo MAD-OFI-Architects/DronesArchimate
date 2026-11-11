@@ -321,9 +321,9 @@ def main(argv: list[str] | None = None) -> int:
         except ModuleNotFoundError as e:
             raise SystemExit(f"La TUI necesita Textual ({e.name}), que no está instalado en este Python.\n"
                              "En Arch (Python gestionado por el sistema) usa un entorno virtual:\n"
-                             "  uv venv .studio-venv && uv pip install --python .studio-venv/bin/python -r requirements.txt\n"
-                             "  .studio-venv/bin/python -m forge studio\n"
-                             "Sin uv: python -m venv .studio-venv && .studio-venv/bin/pip install -r requirements.txt") from e
+                             "  uv venv .venv && uv pip install --python .venv/bin/python -r requirements.txt\n"
+                             "  .venv/bin/python -m forge studio\n"
+                             "Sin uv: python -m venv .venv && .venv/bin/pip install -r requirements.txt") from e
         run()
         return 0
     cfg = config.load(Path(a.config))

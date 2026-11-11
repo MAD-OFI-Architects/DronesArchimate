@@ -17,8 +17,8 @@ La configuración existente apuntaba a:
 
 ```toml
 [inputs]
-archimate = "inputs/DronesArchimate/modelo/drones-mantenimiento.archimate"
-docs_dir = "inputs/DronesArchimate"
+archimate = "../modelo/drones-mantenimiento.archimate"
+docs_dir = ".."
 reference_guide = "reference/guia_ddd.md"
 ```
 
@@ -274,7 +274,7 @@ forge.toml
 forge.claude.toml
 decisiones/intervenciones.toml
 decisiones/repuestos-del-taller.toml
-inputs/DronesArchimate/modelo/drones-mantenimiento.archimate
+../modelo/drones-mantenimiento.archimate
 reference/evaluacion_final.md
 .forge/intervenciones/
 .forge/repuestos-del-taller/

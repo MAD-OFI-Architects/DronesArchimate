@@ -5,11 +5,11 @@ ArchiForge **aconseja** (según el modelo ArchiMate) y **ejecuta con fidelidad a
 
 ## ArchiForge Studio (TUI) — la forma cómoda
 ```
-uv venv .studio-venv
-uv pip install --python .studio-venv/bin/python -r requirements.txt
-.studio-venv/bin/python -m forge studio
+uv venv .venv
+uv pip install --python .venv/bin/python -r requirements.txt
+.venv/bin/python -m forge studio
 ```
-(En Arch no uses `pip` global: el Python del sistema es «externally managed». Sin `uv`: `python -m venv .studio-venv && .studio-venv/bin/pip install -r requirements.txt`.
+(Un solo entorno `.venv` sirve para el CLI, las pruebas y la TUI. En Arch no uses `pip` global: el Python del sistema es «externally managed». Sin `uv`: `python -m venv .venv && .venv/bin/pip install -r requirements.txt`.
 Si copias comandos a zsh, quita los comentarios `#` de la misma línea: zsh interactivo no los acepta.)
 Sin escribir archivos de configuración: **Nuevo proyecto** (eliges tu `.archimate` y la TUI te dice al instante qué entiende de él),
 **Dominios** (decides lenguaje, arquitectura, BD y patrones con las recomendaciones al lado), **Agente y tokens** (motor `opencode`/`claude`/propio,
