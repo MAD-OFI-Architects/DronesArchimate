@@ -6,6 +6,8 @@ Una sola fuente de verdad; `python -m forge install-agents` escribe:
 """
 from __future__ import annotations
 
+import os
+import threading
 from pathlib import Path
 
 SUBAGENT_PROTOCOL = """\
@@ -167,12 +169,19 @@ def _orchestrator_body(tool: str) -> str:
     return ORCHESTRATOR_BODY.replace("{delegate_tool}", deleg)
 
 
+_LOCK = threading.Lock()
+
+
 def install(root: Path, targets: tuple[str, ...] = ("claude", "opencode"), model: str = "") -> list[Path]:
     written: list[Path] = []
 
     def w(path: Path, text: str) -> None:
+        """Idempotente y atómico: si el contenido no cambió no se toca el archivo (dominios en paralelo, agentes leyéndolo)."""
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
+        if not (path.exists() and path.read_text(encoding="utf-8") == text):
+            tmp = path.with_name(f".{path.name}.tmp")
+            tmp.write_text(text, encoding="utf-8")
+            os.replace(tmp, path)
         written.append(path)
 
     if "claude" in targets:
@@ -199,3 +208,9 @@ def install(root: Path, targets: tuple[str, ...] = ("claude", "opencode"), model
         w(root / ".opencode" / "commands" / "forge-design.md",
           f"---\ndescription: ArchiForge: decide con el agente lenguaje, BD, arquitectura, estilo y patrones de un dominio\n{_model_line(model)}---\n\n" + DESIGN_BODY)
     return written
+
+
+def ensure(root: Path, model: str = "", targets: tuple[str, ...] = ("claude", "opencode")) -> list[Path]:
+    """Deja los agentes y comandos generados al día (los archivos de `.claude/` y `.opencode/` NO se versionan: se regeneran aquí)."""
+    with _LOCK:
+        return install(root, targets, model)

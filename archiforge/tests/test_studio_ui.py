@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from textual.widgets import DataTable, Input, RichLog, SelectionList, Select  # noqa: E402
 
 from forge.credentials import CredentialStore  # noqa: E402
+from forge.studio import projects  # noqa: E402
 from forge.studio.projects import AgentSettings, ProjectStore  # noqa: E402
 from forge.studio.ui.app import StudioApp  # noqa: E402
 from forge.studio.ui.widgets import Banner  # noqa: E402
@@ -193,9 +194,28 @@ def test_engine_and_model_are_saved_into_the_project(env):
             s.query_one("#model", Input).value = "sonnet"
             await pilot.click("#save-engine")
             await pilot.pause(0.4)
+    before = info.toml.read_bytes()
     run(go())
     cfg = store.load(info)
     assert (cfg.agent.engine, cfg.agent.model) == ("claude", "sonnet")
+    assert info.toml.read_bytes() == before                               # lo personal no toca forge.toml (que viaja con git)
+
+
+def test_reset_button_returns_to_the_team_value(env):
+    store, creds, info = env
+    store.save_agent(info, projects.AgentSettings(engine="claude", model="sonnet"))
+
+    async def go():
+        app = StudioApp(store, creds)
+        async with app.run_test(size=SIZE) as pilot:
+            await wait_for(pilot, lambda: type(app.screen).__name__ == "HomeScreen")
+            await pilot.press("k")
+            await wait_for(pilot, lambda: type(app.screen).__name__ == "AgentScreen")
+            await wait_for(pilot, lambda: app.screen.query_one("#model", Input).value == "sonnet")
+            await pilot.click("#reset")
+            await wait_for(pilot, lambda: app.screen.query_one("#model", Input).value == "")
+    run(go())
+    assert store.load(info).agent.engine == "custom"
 
 
 def test_build_screen_streams_the_log_and_reports_failure_without_crashing(env):

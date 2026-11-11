@@ -55,22 +55,6 @@ def test_forget_never_deletes_files(store):
     assert store.list() == [] and info.toml.exists()
 
 
-def test_save_agent_rewrites_only_the_agent_section(store):
-    info = store.create("Uno", ARCHIMATE, DOCS, projects.AgentSettings())
-    text = info.toml.read_text(encoding="utf-8")
-    info.toml.write_text(text.replace("[quality]", "# comentario del usuario\n[quality]"), encoding="utf-8")
-    store.save_agent(info, projects.AgentSettings(engine="claude", model="sonnet", max_attempts=5))
-    after = info.toml.read_text(encoding="utf-8")
-    assert "# comentario del usuario" in after and after.count("[agent]") == 1
-    cfg = store.load(info)
-    assert (cfg.agent.engine, cfg.agent.model, cfg.agent.max_attempts) == ("claude", "sonnet", 5) and cfg.min_conformance == 0.9
-
-
-def test_set_agent_block_appends_when_missing():
-    out = projects.set_agent_block('[inputs]\narchimate = "x"\n', projects.AgentSettings(model="m"))
-    assert out.count("[agent]") == 1 and 'model = "m"' in out
-
-
 # ------------------------------------------------------------------ inspección del modelo
 def test_inspect_model_with_docs_is_ready():
     r = model.inspect_model(ARCHIMATE, DOCS)

@@ -91,7 +91,8 @@ def load(path: Path) -> Config:
     raw = tomllib.loads(path.read_text(encoding="utf-8"))
     root = path.parent
     inp, out = raw["inputs"], raw.get("output", {})
-    ag = raw.get("agent", {})
+    from . import personal
+    ag = {**raw.get("agent", {}), **personal.load(path)}      # lo personal gana sobre el valor del equipo (forge.toml)
     cfg = Config(
         root=root,
         archimate=root / inp["archimate"],

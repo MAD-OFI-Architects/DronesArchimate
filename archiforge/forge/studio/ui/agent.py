@@ -38,6 +38,8 @@ class AgentScreen(Screen):
             with TabPane("Motor y modelo", id="tab-engine"):
                 with VerticalScroll(classes="card"):
                     yield Static(f"Agente de «{self.info.name}»" if self.info else "Abre un proyecto para elegir su motor y modelo.", classes="card-title")
+                    yield Static("[dim]Es una preferencia tuya: se guarda en tu configuración, no en el repositorio, "
+                                 "así que tus compañeros no la reciben al hacer git pull.[/]")
                     yield Label("Motor", classes="field-label")
                     yield Select(ENGINE_LABELS, value="opencode", allow_blank=False, id="engine")
                     yield Label("Modelo", classes="field-label")
@@ -58,6 +60,7 @@ class AgentScreen(Screen):
                     with Horizontal(classes="buttons"):
                         yield Button("Guardar motor y modelo", id="save-engine", variant="success", disabled=not self.info)
                         yield Button("Comprobar que está instalado", id="check")
+                        yield Button("Usar el valor del equipo", id="reset", disabled=not self.info)
             with TabPane("Tokens de API", id="tab-tokens"):
                 with VerticalScroll(classes="card"):
                     yield Static("Tokens de API", classes="card-title")
@@ -80,18 +83,23 @@ class AgentScreen(Screen):
         t = self.query_one("#tokens", DataTable)
         t.add_columns("Variable", "Valor")
         self.refresh_tokens()
-        if self.info:
-            try:
-                self.settings = AgentSettings.from_cfg(self.app.store.load(self.info).agent)
-            except Exception as e:  # noqa: BLE001
-                self.query_one("#banner", Banner).show("error", f"No se pudo leer el proyecto: {e}")
-            s = self.settings
-            self.query_one("#engine", Select).value = s.engine
-            self.query_one("#model", Input).value = s.model
-            self.query_one("#oc-agent", Input).value = s.opencode_agent
-            self.query_one("#custom", Input).value = " ".join(shlex.quote(x) for x in s.custom_argv)
-            self.query_one("#attempts", Input).value = str(s.max_attempts)
-            self.query_one("#timeout", Input).value = str(s.timeout_minutes)
+        self.load_fields()
+        self.hint()
+
+    def load_fields(self) -> None:
+        if not self.info:
+            return
+        try:
+            self.settings = AgentSettings.from_cfg(self.app.store.load(self.info).agent)
+        except Exception as e:  # noqa: BLE001
+            self.query_one("#banner", Banner).show("error", f"No se pudo leer el proyecto: {e}")
+        s = self.settings
+        self.query_one("#engine", Select).value = s.engine
+        self.query_one("#model", Input).value = s.model
+        self.query_one("#oc-agent", Input).value = s.opencode_agent
+        self.query_one("#custom", Input).value = " ".join(shlex.quote(x) for x in s.custom_argv)
+        self.query_one("#attempts", Input).value = str(s.max_attempts)
+        self.query_one("#timeout", Input).value = str(s.timeout_minutes)
         self.hint()
 
     def hint(self) -> None:
@@ -114,6 +122,12 @@ class AgentScreen(Screen):
             return
         v = cli._ver([eng, "--version"])
         out.update(f"[b $success]✓ {eng} instalado[/]  [dim]{v}[/]" if v else f"[b $error]✗ No encuentro «{eng}» en el PATH.[/]  Instálalo o elige otro motor.")
+
+    @on(Button.Pressed, "#reset")
+    def _reset(self) -> None:
+        self.app.store.reset_agent(self.info)
+        self.load_fields()
+        self.query_one("#banner", Banner).show("ok", "Vuelves al motor y modelo que define el equipo en forge.toml.")
 
     @on(Button.Pressed, "#save-engine")
     def _save_engine(self) -> None:

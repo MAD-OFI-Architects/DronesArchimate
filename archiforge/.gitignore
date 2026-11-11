@@ -9,3 +9,5 @@ node_modules/
 opencode.json
 projects/
 .studio-venv/
+/.claude/
+/.opencode/

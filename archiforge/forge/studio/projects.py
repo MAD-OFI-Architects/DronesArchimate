@@ -7,12 +7,11 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .. import agentdefs, config
+from .. import agentdefs, config, personal
 from ..config import TOOL_ROOT, Config
 from ..credentials import default_path as _cred_path
 from ..util import kebab
@@ -60,17 +59,6 @@ def agent_block(a: AgentSettings) -> str:
     if a.custom_argv:
         L.append("custom_argv = [" + ", ".join(_q(x) for x in a.custom_argv) + "]")
     return "\n".join(L) + "\n"
-
-
-_SECTION = re.compile(r"^\[agent\][^\n]*\n(?:(?!\[)[^\n]*\n?)*", re.M)
-
-
-def set_agent_block(toml_text: str, a: AgentSettings) -> str:
-    """Reemplaza solo la sección [agent] (conserva el resto y sus comentarios); si no existe, la añade."""
-    block = agent_block(a)
-    if _SECTION.search(toml_text):
-        return _SECTION.sub(lambda _m: block, toml_text, count=1)
-    return toml_text.rstrip("\n") + "\n\n" + block
 
 
 def render_forge_toml(archimate: Path, docs_dir: Path | None, agent: AgentSettings) -> str:
@@ -165,8 +153,15 @@ class ProjectStore:
         return config.load(info.toml)
 
     def save_agent(self, info: ProjectInfo, agent: AgentSettings) -> None:
-        """Guarda motor/modelo del proyecto y regenera sus agentes (el modelo va dentro de la definición de cada agente)."""
+        """Guarda motor/modelo como preferencia PERSONAL (fuera del repositorio) y deja los agentes al día.
+        `forge.toml` no se toca: es el valor del equipo y viaja con git."""
         agent.validate()
-        text = info.toml.read_text(encoding="utf-8")
-        info.toml.write_text(set_agent_block(text, agent), encoding="utf-8")
-        agentdefs.install(info.root, ("claude", "opencode"), agent.model)
+        personal.save(info.toml, {"engine": agent.engine, "model": agent.model, "opencode_agent": agent.opencode_agent,
+                                  "max_attempts": agent.max_attempts, "timeout_minutes": agent.timeout_minutes,
+                                  "custom_argv": list(agent.custom_argv)})
+        agentdefs.ensure(info.root, agent.model)
+
+    def reset_agent(self, info: ProjectInfo) -> None:
+        """Vuelve al valor del equipo (forge.toml)."""
+        personal.clear(info.toml)
+        agentdefs.ensure(info.root, self.load(info).agent.model)

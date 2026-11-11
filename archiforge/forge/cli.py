@@ -19,7 +19,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from . import advisor, config, decisions
+from . import advisor, agentdefs, config, decisions
 from . import gates as G
 from .archimate import build_ir
 from .config import Domain
@@ -173,6 +173,7 @@ def _reopen(run: Runner) -> None:
 def build_one(cfg: config.Config, d: Domain, a, sink=None, agent_env: dict | None = None, cancel=None) -> int:
     """`sink(línea)` recibe el log en vez de imprimirlo; `agent_env` son variables para el agente (tokens); `cancel` es un
     threading.Event: al activarse, el dominio se detiene al terminar la etapa en curso. Los tres son para la TUI."""
+    agentdefs.ensure(cfg.root, cfg.agent.model)       # los agentes generados no están en git: se crean o actualizan aquí
     run = Runner(cfg, d, a.skip_permissions, agent_env=agent_env)
     run.sink, run.cancel = sink, cancel
     for lap in range(1, a.laps + 1):
