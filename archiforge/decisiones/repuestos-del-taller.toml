@@ -1,0 +1,23 @@
+# Decisiones de arquitectura de «Repuestos del Taller» — las toma el arquitecto; la herramienta ejecuta fiel a esto.
+contexto = "Repuestos del Taller"
+lenguaje = "python"            # csharp | python | java
+arquitectura = "hexagonal"     # clean-ddd | hexagonal
+estilo = "microservicio"        # microservicio | soa | monolito-modular
+base_de_datos = "postgresql"   # mongodb | postgresql
+puerto = 5102
+
+[patrones]   # true = usar · false = descartado
+memento = true
+cache = true
+cifrado = true
+eventos = true
+outbox = true
+acl = true
+state = true
+
+[justificacion]   # tus razones; el ADR las cita tal cual
+lenguaje = "Ejemplo: Python/FastAPI, rápido de iterar."
+arquitectura = "Ejemplo: hexagonal; dominio casi sin dependencias y puertos claros hacia inventario y bus."
+estilo = "Ejemplo: microservicio con eventos (reservas y reposición)."
+base_de_datos = "Ejemplo: PostgreSQL; el stock exige consistencia transaccional."
+state = "Existencia y Solicitud de reposición tienen ciclo de vida (disponible → reservado → consumido → bajo mínimo → reponiendo) con transiciones validadas."

@@ -1,0 +1,33 @@
+{% from '_layout.md.j2' import layout %}
+{% include '_common.md.j2' %}
+
+## Tarea
+Crea el **proyecto** de `{{ d.prefix }}` ({{ d.language }}) y su **shared kernel** (código genérico, sin conceptos de negocio) siguiendo la guía del profesor (`reference/guia_ddd.md`, diapositivas 5–7 y 19–59: léelas COMPLETAS; son C# pero describen los roles que debes reproducir en {{ d.language }}).
+
+### Estructura
+{{ layout(d) }}
+{% if d.language == 'csharp' %}
+Usa `dotnet --version` y apunta `TargetFramework` a `net{major}.0` de ese SDK (mínimo net8.0). Activa `Nullable` e `ImplicitUsings`. Crea los proyectos de `{{ d.prefix }}.*` **vacíos** con sus referencias correctas; las capas las llenan las etapas siguientes.
+{% elif d.language == 'python' %}
+Python ≥ 3.11 con type hints. `pyproject.toml` con extra `dev` (pytest, httpx). Crea los paquetes de `{{ d.slug | replace('-', '_') }}` vacíos (`__init__.py`); las capas las llenan las etapas siguientes.
+{% else %}
+`pom.xml` con Spring Boot 3 (parent), Java del JDK instalado (`java -version`, mínimo 17), JUnit 5 y `spring-boot-starter-web`{% if d.database == 'mongodb' %}, `spring-boot-starter-data-mongodb`{% else %}, `spring-boot-starter-data-jpa` y el driver PostgreSQL (H2 en alcance `test`){% endif %}. Las pruebas deben pasar con `mvn -q -B test` **sin red ni bases de datos reales**.
+{% endif %}
+
+### Shared kernel a implementar (genérico)
+- **Dominio**: `Guard`, `DomainException`, `BusinessRuleViolationException`, `IBusinessRule` (+ ayudante que las comprueba), `Entity<TId>`, `IAggregateRoot`, `AggregateRoot<TId>` (con `Raise` de eventos), `IDomainEvent`/`DomainEvent`{% if d.uses('specification') %}, `Especificacion<T>` (Y/O/NO){% endif %}{% if d.uses('memento') %}, `IOriginador<TAgregado,TMemento>` (Memento){% endif %}.
+{% if d.uses('cqrs') %}- **Aplicación (CQRS)**: `IComando`, `IConsulta`, `IManejadorDeSolicitud`, `IMediador` + `Mediador`{% if d.uses('pipeline') %}, y el pipeline de comportamientos **Registro → Validación → Transacción** (Chain of Responsibility){% endif %}, `ValidadorBase`/colector de errores, excepciones de aplicación (no encontrado, conflicto, validación), `IClock`, `IUnidadDeTrabajo`.
+{% else %}- **Aplicación**: excepciones de aplicación (no encontrado, conflicto, validación), `ValidadorBase`/colector de errores, `IClock`, `IUnidadDeTrabajo`. (Sin mediador ni consultas: CQRS fue descartado.)
+{% endif %}
+{% if d.uses('eventos') %}- **Eventos**: `IBusDeEventos` con implementación **HTTP** (`POST {BUS_URL}/publish`, sobre en `out/docs/contrato-bus.md`) y en **memoria** (pruebas); contrato de manejador de evento de integración y traductor de evento de dominio.
+{% endif %}
+{% if d.uses('outbox') %}- **Outbox**: `BandejaDeSalida` (guarda agregado + mensajes en una operación, y un despachador los publica con reintentos) y `ProcesadorDeMensajeEntrante` (**idempotente** por `eventId`).
+{% endif %}
+- **Persistencia**: puerto de almacén de {% if d.database == 'mongodb' %}documentos con implementación MongoDB y una **en memoria** para pruebas{% else %}datos relacionales (repositorio base y unidad de trabajo) con implementación sobre {{ d.language }}-PostgreSQL y una **en memoria/H2** para pruebas{% endif %}. El dominio NO conoce la base de datos.
+- **API**: mapeo de errores a **ProblemDetails RFC 9457** (`application/problem+json`): DomainException→400, BusinessRuleViolation→422 con campo `regla`, no encontrado→404, conflicto→409; correlación por petición.
+
+### Pruebas del kernel
+Al menos: Guard, AggregateRoot+eventos, reglas de negocio{% if d.uses('specification') %}, Especificacion{% endif %}{% if d.uses('cqrs') %}, mediador{% if d.uses('pipeline') %}+pipeline (orden y transacción){% endif %}{% endif %}{% if d.uses('outbox') %}, outbox atómico, idempotencia del procesador{% endif %}, mapeo de excepciones a ProblemDetails.
+
+## Criterio de aceptación (automático)
+{{ gates_text }}

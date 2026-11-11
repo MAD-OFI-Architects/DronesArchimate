@@ -1,0 +1,61 @@
+{% macro layout(d) -%}
+{% set pkg = d.slug | replace('-', '_') %}
+{% if d.language == 'csharp' and d.architecture == 'clean-ddd' -%}
+```
+out/services/{{ d.slug }}/
+  {{ d.prefix }}.sln
+  src/BuildingBlocks/BuildingBlocks.{Domain,Application,Infrastructure,Api}/    shared kernel (genérico, sin negocio)
+  src/{{ d.prefix }}.{Domain,Application,Contracts,Infrastructure,Api}/
+  tests/BuildingBlocks.Tests/  tests/{{ d.prefix }}.Tests/                        xUnit
+  Dockerfile  README.md
+```
+Dependencias (las comprueba un verificador sobre los .csproj): Domain → solo BuildingBlocks.Domain · Contracts → nada · Application → Domain, Contracts · Infrastructure → Application, Domain, Contracts · Api → todas.
+{%- elif d.language == 'csharp' -%}
+```
+out/services/{{ d.slug }}/
+  {{ d.prefix }}.sln
+  src/{{ d.prefix }}.{Domain,Application,Contracts}/        núcleo (Domain incluye una carpeta Shared con Guard, Entity, AggregateRoot, DomainEvent…)
+  src/{{ d.prefix }}.Adapters.Outbound/                      adaptadores de salida (persistencia, bus, ACL, cifrado)
+  src/{{ d.prefix }}.Adapters.Inbound/                       adaptador de entrada (HTTP, Minimal APIs) y composición
+  tests/{{ d.prefix }}.Tests/                                xUnit
+  Dockerfile  README.md
+```
+Dependencias (verificadas sobre los .csproj): Domain → nada · Application → Domain, Contracts · Adapters.* → hacia adentro.
+{%- elif d.language == 'python' and d.architecture == 'hexagonal' -%}
+```
+out/services/{{ d.slug }}/
+  src/{{ pkg }}/{domain,application,contracts}/
+  src/{{ pkg }}/adapters/inbound/http/        FastAPI: endpoints, solicitudes, composición
+  src/{{ pkg }}/adapters/outbound/            persistencia, caché, cifrado, bus, ACL, bandeja de salida
+  tests/  pyproject.toml  Dockerfile  README.md
+```
+Un analizador de imports comprueba: `domain` solo usa la biblioteca estándar y no importa application/adapters/contracts; `application` no importa adapters; `contracts` es autocontenido.
+{%- elif d.language == 'python' -%}
+```
+out/services/{{ d.slug }}/
+  src/{{ pkg }}/shared/                       shared kernel (genérico, sin negocio)
+  src/{{ pkg }}/{domain,application,contracts,infrastructure,api}/
+  tests/  pyproject.toml  Dockerfile  README.md
+```
+Un analizador de imports comprueba: `domain` solo usa stdlib + `shared`; `application` no importa infrastructure/api; `contracts` es autocontenido.
+{%- elif d.architecture == 'hexagonal' -%}
+```
+out/services/{{ d.slug }}/   (proyecto Maven de un módulo, Spring Boot 3, Java: usa el JDK instalado, mínimo 17)
+  pom.xml  Dockerfile  README.md
+  src/main/java/com/agrodrones/{{ pkg }}/{domain,application,contracts}/
+  src/main/java/com/agrodrones/{{ pkg }}/adapters/inbound/   REST controllers y composición
+  src/main/java/com/agrodrones/{{ pkg }}/adapters/outbound/  persistencia, caché, cifrado, bus, ACL, bandeja de salida
+  src/test/java/com/agrodrones/{{ pkg }}/...
+```
+Un analizador de imports comprueba: `domain` no importa Spring, JPA, Mongo ni otras capas; `application` no importa adapters ni Spring Web.
+{%- else -%}
+```
+out/services/{{ d.slug }}/   (proyecto Maven de un módulo, Spring Boot 3, Java: usa el JDK instalado, mínimo 17)
+  pom.xml  Dockerfile  README.md
+  src/main/java/com/agrodrones/{{ pkg }}/shared/                        shared kernel (genérico, sin negocio)
+  src/main/java/com/agrodrones/{{ pkg }}/{domain,application,contracts,infrastructure,api}/
+  src/test/java/com/agrodrones/{{ pkg }}/...
+```
+Un analizador de imports comprueba: `domain` no importa Spring, JPA, Mongo ni otras capas; `application` no importa infrastructure/api.
+{%- endif %}
+{%- endmacro %}

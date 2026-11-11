@@ -1,0 +1,19 @@
+## Decisiones del arquitecto (VINCULANTES)
+Las tomó el equipo para **{{ d.context }}**; son la fuente de verdad. No las cambies ni las «mejores»: si crees que una es un error, impleméntala igual y anótalo en `out/docs/{{ d.slug }}/supuestos.md`.
+
+- **Lenguaje**: {{ d.language }} · **Arquitectura interna**: {{ d.architecture }} · **Estilo de servicio**: {{ d.style }} · **Base de datos**: {{ d.database }} · **Puerto**: {{ d.port }}
+{% for pid, p in d.patterns.items() if p.get('usar') %}- **Patrón elegido** `{{ pid }}` — {{ cat[pid].nombre }}{% if d.rationale.get(pid) %}: {{ d.rationale[pid] }}{% endif %}{% for k, v in p.items() if k != 'usar' %} ({{ k }}: {{ v }}){% endfor %}
+
+{% endfor %}
+- **Patrones descartados o no elegidos** (NO los implementes ni generes clases para ellos): {% for pid in cat %}{% if not d.uses(pid) %}`{{ pid }}` {% endif %}{% endfor %}
+
+{% for k in ['lenguaje', 'arquitectura', 'estilo', 'base_de_datos'] if d.rationale.get(k) %}- Justificación de {{ k }}: {{ d.rationale[k] }}
+{% endfor %}
+{% if d.style == 'microservicio' %}- Estilo **microservicio**: servicio autónomo con su propia base de datos; se integra con otros contextos por eventos (bus) y APIs.
+{% elif d.style == 'soa' %}- Estilo **SOA**: servicio de grano grueso con **contrato explícito** (archivo `openapi.yaml` en la raíz del servicio, escrito primero y coherente con las rutas), un `Orquestador{{ d.prefix }}` en la capa de aplicación que coordina las llamadas a otros servicios por sus puertos, y modelos de mensaje canónicos en `contracts`.
+{% elif d.style == 'monolito-modular' %}- Estilo **monolito modular**: UN despliegue con **un módulo por agregado**; cada módulo expone una fachada pública `I<Raiz>Modulo` en `contracts` y los módulos se hablan solo por esas fachadas (nunca por clases internas); `{{ d.prefix }}Modulos` (capa api) los registra; sin red entre módulos.
+{% endif %}
+- **Variables de entorno** (las fija el orquestador en el compose; el servicio las LEE tal cual): {% for k in info.env %}`{{ k }}` {% endfor %}
+
+{% if d.database == 'mongodb' %}- `MONGO_URL` apunta a un **replica set de un nodo**: puedes y debes usar transacciones de MongoDB para guardar el agregado y la bandeja de salida de forma atómica.
+{% endif %}

@@ -1,0 +1,11 @@
+- El gateway expone la salud como `/api/repuestos/health`, porque su proxy traduce `/api/repuestos/` a `/api/`.
+- El simulador emite eventos en `/sim/simulate/{contexto}/{evento}`; `/sim/` es el prefijo del gateway.
+- La reserva de una parada se identifica por `paradaId`; la OT cerrada usa ese mismo id para confirmar el consumo.
+- Una parada con faltante se da por procesada (el manejador ya publicó Faltante detectado): devolver error haría que el bus reintente y duplique el aviso.
+- El publicador de eventos envía el sobre completo del contrato (`eventId`, `topic`, `occurredOn`, `correlationId`, `payload`); el `eventId` del evento de dominio sale del `payload`.
+- El estado del servicio vive en memoria: para repetir el humo desde cero se reinicia con `docker compose restart repuestos-del-taller`.
+- MFE: las rutas usan `referencia`/`solicitud_id` (parámetros reales del servicio) en lugar de `{id}` del manifiesto. Por qué: el servicio expone esas rutas.
+- MFE: los errores se leen de `regla` y, si falta, de `error` (el servicio actual responde `{"error": ...}`). Por qué: mostrar siempre un mensaje claro.
+- MFE: `vite.config.ts` fija NODE_ENV=production solo en build, no en test. Por qué: React de producción no soporta `act` en Testing Library.
+- La política «Stock mínimo alcanzado → Solicitar reposición» crea la solicitud con cantidad 1 y monto 0. Por qué: el modelo no define cantidad ni monto.
+- Aprobar una solicitud pasa la existencia de `bajo_minimo` a `reponiendo`. Por qué: el State decidido lo pide y el modelo no indica otra señal.

@@ -1,0 +1,17 @@
+{
+  "context": "Repuestos del Taller",
+  "language": "python",
+  "architecture": "hexagonal",
+  "style": "microservicio",
+  "database": "postgresql",
+  "port": 5102,
+  "patterns": [
+    "acl",
+    "cache",
+    "cifrado",
+    "eventos",
+    "memento",
+    "outbox",
+    "state"
+  ]
+}

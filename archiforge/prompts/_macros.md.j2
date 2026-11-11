@@ -1,0 +1,7 @@
+{% macro items_table(items) -%}
+| Capa | Tipo | Símbolo (nombre EXACTO) | Elemento del modelo |
+|---|---|---|---|
+{% for i in items -%}
+| {{ i.layer }} | {{ i.kind }} | `{{ i.name }}` | {{ i.trace }}{% if i.get('triggers') %} → {{ i.triggers | join(', ') }}{% endif %} |
+{% endfor %}
+{%- endmacro %}

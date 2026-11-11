@@ -1,0 +1,8 @@
+{
+  "tag": "mfe-repuestos-del-taller",
+  "context": "Repuestos del Taller",
+  "roles": [
+    "Almacenista",
+    "Jefe de Operaciones y Mantenimiento"
+  ]
+}

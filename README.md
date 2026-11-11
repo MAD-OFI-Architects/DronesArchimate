@@ -18,6 +18,8 @@
 
 Tabla de aportes: [ver al final](#tabla-de-aportes).
 
+> **Entrega final (V3).** El producto generado desde este modelo está en [`entrega-v3/`](entrega-v3/README.md) —dos dominios reales, contextos simulados y microfrontends— y el generador usado en [`archiforge/`](archiforge/README.md). El paso a paso está en [`docs/guia-ejecucion-v3.md`](docs/guia-ejecucion-v3.md).
+
 ## Estructura del repositorio
 ```text
 /

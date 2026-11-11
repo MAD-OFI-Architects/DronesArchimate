@@ -1,0 +1,23 @@
+{% include '_common.md.j2' %}
+
+## Tarea
+Redacta `out/docs/{{ d.slug }}/decisiones-arquitectura.md`: el documento que **argumenta** las decisiones del arquitecto para **{{ d.context }}**. Es entregable de la evaluación: concreto, breve y justificado con el modelo (cita agregados, comandos, eventos y relaciones reales del IR). **No decides nada tú**: documentas y argumentas lo que el arquitecto decidió (sección «Decisiones del arquitecto»), usando sus justificaciones como base y completándolas con evidencia del modelo. Si alguna justificación falta, redáctala con criterio y márcala «(propuesta del asistente, a confirmar)».
+
+Secciones, en este orden:
+1. **Arquitectura** — {{ d.architecture }} y por qué encaja con la complejidad de este contexto ({{ info.aggregates | join(', ') }}; {{ info.commands | length }} comandos; clasificación en el modelo: {{ ctx.classification }}). Qué se mezcla con los otros dominios y por qué.
+2. **Estilo de servicio** — {{ d.style }}: qué implica aquí (despliegue, datos, integración).
+3. **Base de datos** — {{ d.database }}: argumento con la forma del agregado y las consistencias que exige.
+4. **Patrones** — una tabla `| Patrón | Dominio | Dónde se aplica (clases) | Por qué |` con **una fila por cada patrón elegido** ({% for pid, p in d.patterns.items() if p.get('usar') %}{{ cat[pid].nombre }}{% if not loop.last %}, {% endif %}{% endfor %}). La columna de clases cita **clases reales entre comillas invertidas**; un verificador comprobará que existan, así que ahora escribe la tabla con los nombres que el manifiesto ya garantiza (agregados, repositorios `I…Repository`, `…Memento`, `…Traductor`, `…Consumidor`, `RepositorioCacheado…`, `Cifrador`) y las etapas siguientes añaden el resto. Después, una lista **«Descartados y por qué»** con cada patrón no elegido y la razón (usa el «cuándo no» del catálogo y el modelo).
+5. **Despliegue** — contenedor propio del servicio, base de datos, bus de eventos, simuladores y gateway (`docker compose`).
+6. **Microfrontend** — el remote `mfe-{{ d.slug }}` de este dominio (partición por dominio, filtro por rol dentro; composición con Web Components).
+7. **Interoperabilidad con los demás contextos** — eventos publicados/consumidos y APIs (ver `out/docs/{{ d.slug }}/contrato-bus.md`).
+8. **Riesgos y supuestos** conocidos.
+
+## Datos del modelo que debes usar
+- Agregados: {{ info.aggregates | join(', ') }}
+- Comandos: {{ info.commands | join(', ') }}
+- Publica: {{ info.published_events | join(', ') or '—' }} · Consume: {{ info.consumed.keys() | list | join(', ') or '—' }}
+- Reglas de negocio (códigos de error de los contratos): {{ info.business_rules | join(', ') or '—' }}
+
+## Criterio de aceptación
+{{ gates_text }}

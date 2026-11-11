@@ -1,0 +1,24 @@
+# ArchiForge — configuración. Las decisiones de arquitectura NO van aquí: viven en decisiones/<dominio>.toml (las toma el arquitecto).
+[inputs]
+archimate = "inputs/DronesArchimate/modelo/drones-mantenimiento.archimate"
+docs_dir = "inputs/DronesArchimate"
+reference_guide = "reference/guia_ddd.md"
+
+[output]
+dir = "out"
+# repo = "https://github.com/ORG/producto.git"   # repositorio del producto: cada quien clona el suyo y publica con `forge publish`
+
+[decisions]
+dir = "decisiones"
+
+[quality]
+min_conformance = 0.9     # la evaluación exige >= 90 % de coincidencia con el diseño
+strict_tools = true       # si falta una herramienta necesaria, `forge build` no arranca (forge doctor)
+skip = []                 # etapas opcionales a omitir: "smoke" (docker) | "frontend"
+
+[agent]
+engine = "opencode"       # claude | opencode | custom
+model = "github-copilot/auto"
+opencode_agent = "forge-orchestrator"   # agente por defecto; el pipeline usa el forge-* de cada etapa
+max_attempts = 3
+timeout_minutes = 90

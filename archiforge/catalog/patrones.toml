@@ -1,0 +1,98 @@
+# Catálogo de patrones. La herramienta RECOMIENDA a partir del ArchiMate; el arquitecto DECIDE en decisiones/<dominio>.toml.
+# "manifiesto": qué símbolos exige el verificador cuando el patrón se usa. Sin patrón elegido, no se exige ni se genera.
+# "evaluacion = true": la evaluación final lo pide; si el diseño no lo cubre, se AVISA (no se impone).
+
+[cqrs]
+nombre = "CQRS con mediador"
+categoria = "aplicación"
+que_es = "Separa comandos (cambian estado) de consultas (leen) y los despacha por un mediador."
+cuando_si = "Hay varias consultas con forma distinta al agregado, lecturas pesadas o equipos distintos para leer y escribir."
+cuando_no = "El dominio es casi CRUD o hay pocas consultas: añade clases (Consulta, Manejador, Dto, Mapeador) sin ganancia."
+costo = "Alto en cantidad de clases."
+manifiesto = "Consulta/Manejador/Dto/Mapeador por agregado y por operación de lectura del contrato."
+
+[pipeline]
+nombre = "Cadena de comportamientos (Chain of Responsibility)"
+categoria = "aplicación"
+que_es = "Envuelve cada manejador con pasos encadenados: registro → validación → transacción."
+cuando_si = "Quieres tratar de forma uniforme validación, transacción y trazas de todos los casos de uso."
+cuando_no = "Hay pocos casos de uso; un decorador o validación directa basta."
+costo = "Medio."
+requiere = ["cqrs"]
+manifiesto = "No exige símbolos propios; el ADR debe citar las clases de la cadena."
+
+[memento]
+nombre = "Memento"
+categoria = "dominio"
+que_es = "Snapshot inmutable del estado del agregado para persistirlo y reconstruirlo sin exponer sus internos."
+cuando_si = "El agregado se guarda como documento o necesita restaurarse/deshacerse; el dominio no debe conocer la persistencia."
+cuando_no = "El ORM ya mapea el agregado directamente y no hay deshacer."
+costo = "Bajo-medio: un record por agregado."
+evaluacion = true
+manifiesto = "<Raiz>Memento por agregado."
+
+[state]
+nombre = "State"
+categoria = "dominio"
+que_es = "El ciclo de vida del agregado se modela con estados y transiciones validadas."
+cuando_si = "El agregado tiene varios estados y reglas de transición (p. ej. abierta → en ejecución → liberada → cerrada)."
+cuando_no = "Dos o tres estados simples: un enum con validación alcanza."
+costo = "Medio: una clase por estado."
+manifiesto = "No exige símbolos fijos; el ADR cita las clases de estado."
+
+[specification]
+nombre = "Specification"
+categoria = "dominio"
+que_es = "Reglas de negocio componibles (Y/O/NO) reutilizables en validación y consultas."
+cuando_si = "Muchas reglas de negocio que se combinan o se reutilizan."
+cuando_no = "Pocas reglas, cada una usada una sola vez."
+costo = "Medio."
+manifiesto = "No exige símbolos fijos; el ADR cita las clases."
+
+[outbox]
+nombre = "Outbox transaccional"
+categoria = "integración"
+que_es = "El evento a publicar se guarda en la misma transacción que el agregado y un despachador lo envía después."
+cuando_si = "El servicio publica eventos y no puede perderlos ni duplicar estado sin evento."
+cuando_no = "No publica eventos o tolera perderlos."
+costo = "Medio: tabla/colección de bandeja y despachador."
+requiere = ["eventos"]
+manifiesto = "BandejaDeSalida y ProcesadorDeMensajeEntrante (idempotente) en infraestructura."
+
+[eventos]
+nombre = "Eventos de integración y consumidores idempotentes"
+categoria = "integración"
+que_es = "Publica contratos de evento versionados (V1) y consume los de otros contextos con traductores y consumidores."
+cuando_si = "El contexto publica o consume eventos según el ArchiMate."
+cuando_no = "Se integra solo por API síncrona."
+costo = "Medio."
+manifiesto = "<Evento>V1, <Evento>Traductor, <Contexto>Topicos, <Evento>Consumidor, <Evento>Observador, PublicadorDeEventosHttp."
+
+[acl]
+nombre = "Capa anticorrupción (ACL)"
+categoria = "integración"
+que_es = "Puerto + adaptador que traduce el modelo de otro contexto al propio para que no contamine el dominio."
+cuando_si = "El contexto llama por API a otro contexto cuyo modelo difiere del propio."
+cuando_no = "No hay llamadas síncronas a otros contextos."
+costo = "Bajo-medio: un puerto y un adaptador por API externa."
+manifiesto = "I<Api> (puerto) y <Api>Adapter por cada API síncrona hacia otro contexto."
+
+[cache]
+nombre = "Caché (decorador de repositorio)"
+categoria = "infraestructura"
+que_es = "Un decorador del repositorio de lectura guarda resultados con TTL e invalida al escribir."
+cuando_si = "Lecturas frecuentes de datos que cambian poco."
+cuando_no = "Datos que cambian a cada operación o deben ser siempre exactos."
+costo = "Bajo, pero exige una política de invalidación."
+evaluacion = true
+manifiesto = "RepositorioCacheado<Raiz> por agregado."
+
+[cifrado]
+nombre = "Cifrado simple de datos personales"
+categoria = "infraestructura"
+que_es = "Un puerto Cifrador con implementación AES-GCM cifra en reposo los datos personales."
+cuando_si = "El contrato exige proteger datos personales (p. ej. Ley 1581 de 2012)."
+cuando_no = "El servicio no guarda datos sensibles."
+costo = "Bajo; la clave viaja por variable de entorno."
+evaluacion = true
+manifiesto = "Cifrador (puerto) y CifradorAes (AES-GCM)."

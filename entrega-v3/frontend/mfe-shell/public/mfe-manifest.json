@@ -1,0 +1,20 @@
+[
+  {
+    "tag": "mfe-intervenciones",
+    "context": "Intervenciones",
+    "roles": [
+      "Jefe de Operaciones y Mantenimiento",
+      "Técnico de mantenimiento"
+    ],
+    "module": "/mfe/mfe-intervenciones/mfe-intervenciones.js"
+  },
+  {
+    "tag": "mfe-repuestos-del-taller",
+    "context": "Repuestos del Taller",
+    "roles": [
+      "Almacenista",
+      "Jefe de Operaciones y Mantenimiento"
+    ],
+    "module": "/mfe/mfe-repuestos-del-taller/mfe-repuestos-del-taller.js"
+  }
+]

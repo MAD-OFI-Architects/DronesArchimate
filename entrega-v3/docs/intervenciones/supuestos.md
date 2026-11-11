@@ -1,0 +1,33 @@
+# Supuestos de diseño — Intervenciones
+
+- Los campos de los eventos entre contextos son supuestos (ver `contrato-bus.md`): el modelo ArchiMate no los define.
+- Las justificaciones del arquitecto en decisiones.toml son texto de ejemplo; el ADR las complementa con evidencia del modelo (a confirmar). La política de caché y la versión optimista del documento son criterio del ADR.
+- Plataforma .NET: el SDK es 10.0, pero el entorno solo tiene los runtimes de ASP.NET Core 8, así que todos los proyectos apuntan a `net8.0` (mínimo permitido) para que compilen y las pruebas corran.
+- El kernel guarda cada agregado en MongoDB como documento `{_id, version, datos}`; `version` da concurrencia optimista (conflicto → 409). Las pruebas usan el almacén en memoria; el adaptador MongoDB no se prueba en herméticas (requiere replica set).
+- El despacho del outbox reintenta con espera exponencial (200 ms base, tope 30 s) y abandona tras 10 intentos; son valores genéricos del kernel, ajustables con `OpcionesDeDespacho`.
+- `Intervenciones.Api` solo trae un `Program.cs` mínimo (`/health`, middlewares y `POST /events/{topic}` del kernel); las etapas siguientes añaden las capas del dominio.
+- Dominio: `EsTrabajoMayor` es un indicador que se fija al abrir la OT; el modelo habla de «trabajos mayores» (vuelo de prueba y liberación por otra persona) pero no define cuáles son.
+- Dominio: `ParadaInexistente` recibe `paradaExiste`, que la capa de aplicación obtiene de la parada programada; el dominio no consulta otros contextos.
+- Dominio: `SerieFaltante` se rompe cuando un consumo marcado `RequiereSerie` no trae la serie instalada; se comprueba al registrar el consumo y de nuevo al cerrar.
+- Dominio: el estado «Ejecutada» se alcanza al registrar el vuelo de prueba; en trabajos menores la liberación sale directo de «En ejecución». Una OT en espera retoma «En ejecución» al registrar tarea o consumo.
+- Dominio: en trabajos mayores la liberación exige vuelo de prueba aprobado (precondición «prueba OK en mayores»); la quien-ejecutó se compara sin distinguir mayúsculas.
+- Aplicación: `AbrirOrdenDeTrabajoComando.ParadaProgramada` indica que Plan de Mantenimiento confirmó la parada (el consumidor lo fija en `true`); alimenta la regla `ParadaInexistente` del dominio. Abrir es idempotente por parada: si ya hay orden devuelve la existente.
+- Aplicación: la orden abierta desde `Parada programada` es `Preventiva` y de trabajo menor, porque el evento no trae esos datos.
+- Aplicación: `AsignarTecnicoManejador` consulta `IConsultaDeHabilitacion` (ACL) y rechaza con la regla `TECNICO_NO_HABILITADO` si no hay habilitación vigente.
+- Aplicación: solo `Orden de trabajo cerrada` tiene contrato publicado, así que solo el cierre deja mensaje en la bandeja; los demás comandos se prueban por persistencia.
+- Aplicación: `FaltanteDetectadoConsumidor` ignora la orden que ya está en espera (idempotencia) y falla si no hay orden para la parada o si está cerrada, de modo que el bus reintenta o agota intentos.
+- Aplicación: `Cifrador` es solo el puerto; ningún caso de uso lo invoca todavía y su adaptador (AES) va en infraestructura.
+- Infraestructura: el cifrado es determinista (el nonce de AES-GCM se deriva con HMAC-SHA256 del texto) para que el kernel detecte cambios comparando el JSON; el mismo dato produce el mismo cifrado.
+- Infraestructura: solo se cifran técnico, quien ejecuta cada tarea y quien libera; son los datos de personas del agregado (Ley 1581/2012). Sin `CIFRADO_CLAVE` válida el servicio no arranca.
+- Infraestructura: la caché guarda mementos (no instancias del agregado) y solo la usa la consulta; los comandos leen del repositorio directo. Se vacía entera tras confirmar cualquier cambio, porque solo hay un agregado.
+- Infraestructura: `PublicadorDeEventosHttp` reutiliza `BusDeEventosHttp` del kernel y reemplaza al bus registrado por el kernel cuando hay `BUS_URL`.
+- Infraestructura: `ConsultaDeHabilitacionAdapter` hace `POST` con `{ "tecnico": … }` y lee `habilitado` (formato del simulador); si el externo falla o responde mal lanza `HabilitacionNoDisponibleException` (500), en vez de decidir por el dominio.
+- API: los comandos responden 204 sin cuerpo y crear responde 201 con `{ id }`; `SIMULATORS_URL` es obligatoria porque la habilitación se consulta siempre por HTTP.
+- API: las pruebas HTTP usan TestServer con almacén y bus en memoria; el adaptador MongoDB sigue sin probarse en herméticas.
+- API: se añade la consulta `GET /api/orden-de-trabajo/por-parada/{paradaId}` porque la orden abierta por el evento «Parada programada» recibe un id nuevo y, sin ella, nadie externo (el humo e2e) puede localizarla.
+- Infraestructura: el orquestador fija `CIFRADO_CLAVE` con 35 bytes; en vez de exigir 16/24/32, una clave de al menos 16 bytes y longitud distinta se reduce a 32 bytes con SHA-256 para que el servicio arranque con el valor tal cual.
+- Puerta «docker compose up»: falló por permiso sobre /var/run/docker.sock (el usuario no está en el grupo `docker`), un problema del entorno y no del servicio; el servicio compila y sus 188 pruebas pasan, y el humo está listo para ejecutarse con Docker accesible.
+- Microfrontend: los identificadores de idempotencia (`tareaId`, `consumoId`, `liberacionId`) los genera el formulario con `crypto.randomUUID()`; el usuario no los digita.
+- Microfrontend: «Cerrar orden de trabajo» no envía cuerpo porque el endpoint no lo lee; los mensajes en lenguaje claro de las reglas de negocio están en `src/reglas.ts`.
+- Microfrontend: `vite.config.ts` aplica `process.env.NODE_ENV=production` solo en `build`, porque Testing Library no funciona con React en modo producción.
+- Microfrontend: la vista de consulta de la orden (GET por identificador) es visible para todos los roles; el servicio no expone un listado.

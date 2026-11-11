@@ -1,0 +1,11 @@
+bin/
+obj/
+node_modules/
+dist/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+TestResults/
+target/
+.env

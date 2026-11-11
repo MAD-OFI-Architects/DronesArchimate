@@ -1,0 +1,42 @@
+{
+  "emits": [
+    {
+      "context": "Plan de Mantenimiento",
+      "context_slug": "plan-de-mantenimiento",
+      "event": "Parada programada",
+      "event_slug": "parada-programada",
+      "topic": "plan-de-mantenimiento.parada-programada.v1",
+      "sample": {
+        "paradaId": "11111111-1111-4111-8111-111111111111",
+        "dronId": "ADV-03",
+        "fechaProgramada": "2026-11-20T08:00:00Z",
+        "tareas": [
+          {
+            "tareaId": "T-101",
+            "descripcion": "Cambio de hélices",
+            "repuestos": [
+              {
+                "referencia": "HEL-T40",
+                "cantidad": 2
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "apis": [
+    {
+      "context": "Habilitación de Personal",
+      "context_slug": "habilitacion-de-personal",
+      "operation": "ConsultaDeHabilitacion",
+      "operation_slug": "consulta-de-habilitacion"
+    },
+    {
+      "context": "Notificaciones",
+      "context_slug": "notificaciones",
+      "operation": "EnviarAviso",
+      "operation_slug": "enviar-aviso"
+    }
+  ]
+}

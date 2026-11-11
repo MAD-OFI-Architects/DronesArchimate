@@ -1,0 +1,1 @@
+"""Adaptadores hexagonales del servicio."""

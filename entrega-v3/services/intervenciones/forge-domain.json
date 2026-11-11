@@ -1,0 +1,20 @@
+{
+  "context": "Intervenciones",
+  "language": "csharp",
+  "architecture": "clean-ddd",
+  "style": "microservicio",
+  "database": "mongodb",
+  "port": 5101,
+  "patterns": [
+    "acl",
+    "cache",
+    "cifrado",
+    "cqrs",
+    "eventos",
+    "memento",
+    "outbox",
+    "pipeline",
+    "specification",
+    "state"
+  ]
+}

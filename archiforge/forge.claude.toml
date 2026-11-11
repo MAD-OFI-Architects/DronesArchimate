@@ -1,0 +1,24 @@
+# ArchiForge con Claude Code como motor — mismo producto, mismas decisiones, mismo out/ y .forge/.
+# Sirve para construir OTRO dominio en paralelo al que corre con OpenCode (forge.toml).
+# Uso:  python -m forge -c forge.claude.toml build "Intervenciones"
+[inputs]
+archimate = "inputs/DronesArchimate/modelo/drones-mantenimiento.archimate"
+docs_dir = "inputs/DronesArchimate"
+reference_guide = "reference/guia_ddd.md"
+
+[output]
+dir = "out"
+
+[decisions]
+dir = "decisiones"
+
+[quality]
+min_conformance = 0.9
+strict_tools = true
+skip = []
+
+[agent]
+engine = "claude"         # Claude Code (2.x): usa los agentes .claude/agents/forge-*
+model = ""                # vacío = el modelo por defecto de tu Claude Code
+max_attempts = 3
+timeout_minutes = 90

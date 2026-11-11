@@ -1,0 +1,1 @@
+:host{display:block;font-family:system-ui,sans-serif}form{display:grid;gap:.6rem;max-width:34rem;margin:1rem 0}label{display:grid;gap:.2rem;font-weight:600}input,select,textarea,button{font:inherit;padding:.45rem}button{cursor:pointer}[role=alert]{color:#b00020}
