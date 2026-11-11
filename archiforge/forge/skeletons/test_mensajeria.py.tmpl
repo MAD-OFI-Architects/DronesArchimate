@@ -1,0 +1,191 @@
+"""Pruebas del outbox/inbox durables — generado por ArchiForge.
+
+ARCHIFORGE: mensajeria-durable (pruebas canónicas; la puerta del pipeline las restaura)
+
+Ejercitan la ruta real del módulo contra sqlite con un shim de la interfaz de psycopg:
+la misma SQL que usa PostgreSQL en producción, sin red y sin base de datos real.
+"""
+from __future__ import annotations
+
+import sqlite3
+import time
+
+import pytest
+
+from __PAQUETE__.__MODULO__ import (
+    BandejaDeSalida,
+    BandejaDeSalidaEnMemoria,
+    BandejaTransaccional,
+    DespachadorDeBandeja,
+    ProcesadorDeMensajeEntrante,
+    PublicadorConBandeja,
+    UnidadDeTrabajo,
+    UnidadEnMemoria,
+)
+
+
+class _Cursor:
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    @property
+    def rowcount(self):
+        return self._cursor.rowcount
+
+    def fetchall(self):
+        return self._cursor.fetchall()
+
+
+class _ConexionSqlite:
+    """Shim mínimo de la interfaz de psycopg sobre sqlite3 (misma SQL, marcadores %s)."""
+
+    def __init__(self, archivo=":memory:"):
+        self._db = sqlite3.connect(archivo, check_same_thread=False)
+        self.autocommit = False
+
+    def execute(self, sql, parametros=()):
+        return _Cursor(self._db.execute(sql.replace("%s", "?"), parametros))
+
+    def commit(self):
+        self._db.commit()
+
+    def rollback(self):
+        self._db.rollback()
+
+    def close(self):
+        self._db.close()
+
+
+def _fabrica(archivo=":memory:"):
+    return lambda: _ConexionSqlite(archivo)
+
+
+class _PublicadorQueFalla:
+    def __init__(self):
+        self.llamadas = 0
+
+    def publicar(self, topico, evento):
+        self.llamadas += 1
+        raise ConnectionError("bus caído")
+
+
+class _Publicador:
+    def __init__(self):
+        self.recibidos = []
+
+    def publicar(self, topico, evento):
+        self.recibidos.append((topico, evento))
+
+
+def test_el_evento_se_escribe_en_la_misma_transaccion_que_el_agregado():
+    with UnidadDeTrabajo(_fabrica()) as unidad:
+        unidad.conexion.execute("CREATE TABLE IF NOT EXISTS agregado (id TEXT PRIMARY KEY)")
+        unidad.conexion.execute("INSERT INTO agregado (id) VALUES (%s)", ("A-1",))
+        BandejaDeSalida(unidad).agregar("repuestos.faltante", {"eventId": "ev-1", "referencia": "R-1"})
+        assert [f["id"] for f in BandejaDeSalida(unidad).pendientes()] == ["ev-1"]
+
+
+def test_si_el_caso_de_uso_falla_no_queda_ni_agregado_ni_evento(tmp_path):
+    fabrica = _fabrica(str(tmp_path / "transaccion.db"))
+    with UnidadDeTrabajo(fabrica) as unidad:
+        unidad.conexion.execute("CREATE TABLE IF NOT EXISTS agregado (id TEXT PRIMARY KEY)")
+    with pytest.raises(RuntimeError, match="regla de negocio"):
+        with UnidadDeTrabajo(fabrica) as unidad:
+            unidad.conexion.execute("INSERT INTO agregado (id) VALUES (%s)", ("A-1",))
+            BandejaDeSalida(unidad).agregar("repuestos.faltante", {"eventId": "ev-1"})
+            raise RuntimeError("regla de negocio")
+    with UnidadDeTrabajo(fabrica) as unidad:
+        assert unidad.conexion.execute("SELECT COUNT(*) FROM agregado").fetchall()[0][0] == 0
+        assert BandejaDeSalida(unidad).pendientes() == []
+
+
+def test_el_despachador_no_descarta_cuando_el_bus_falla(tmp_path):
+    fabrica = _fabrica(str(tmp_path / "outbox.db"))
+    with UnidadDeTrabajo(fabrica) as unidad:
+        BandejaDeSalida(unidad).agregar("repuestos.faltante", {"eventId": "ev-1"})
+
+    publicador = _PublicadorQueFalla()
+    despachador = DespachadorDeBandeja(lambda: BandejaTransaccional(fabrica), publicador)
+    for _ in range(5):
+        assert despachador.despachar_una_vez() == 0
+    assert publicador.llamadas == 5
+
+    with UnidadDeTrabajo(fabrica) as unidad:
+        assert [f["id"] for f in BandejaDeSalida(unidad).pendientes()] == ["ev-1"]
+        fila = unidad.conexion.execute(
+            "SELECT intentos, publicado_en FROM bandeja_salida WHERE id = %s", ("ev-1",)).fetchall()[0]
+        assert fila == (5, None)
+
+
+def test_al_arrancar_publica_lo_pendiente_de_una_caida(tmp_path):
+    fabrica = _fabrica(str(tmp_path / "recuperacion.db"))
+    with UnidadDeTrabajo(fabrica) as unidad:
+        BandejaDeSalida(unidad).agregar("repuestos.faltante", {"eventId": "ev-2", "dato": 1})
+
+    publicador = _Publicador()
+    despachador = DespachadorDeBandeja(lambda: BandejaTransaccional(fabrica), publicador, intervalo=0.02)
+    despachador.arrancar()
+    limite = time.time() + 3
+    while not publicador.recibidos and time.time() < limite:
+        time.sleep(0.02)
+    despachador.detener()
+
+    assert publicador.recibidos == [("repuestos.faltante", {"eventId": "ev-2", "dato": 1})]
+    with UnidadDeTrabajo(fabrica) as unidad:
+        assert BandejaDeSalida(unidad).pendientes() == []
+
+
+def test_el_publicador_solo_encola_y_el_despachador_es_quien_envia(tmp_path):
+    fabrica = _fabrica(str(tmp_path / "cola.db"))
+    with UnidadDeTrabajo(fabrica) as unidad:
+        PublicadorConBandeja(BandejaDeSalida(unidad)).publicar("repuestos.faltante", {"eventId": "ev-3"})
+        assert [f["id"] for f in BandejaDeSalida(unidad).pendientes()] == ["ev-3"]
+
+    publicador = _Publicador()
+    DespachadorDeBandeja(lambda: BandejaTransaccional(fabrica), publicador).despachar_una_vez()
+    assert publicador.recibidos == [("repuestos.faltante", {"eventId": "ev-3"})]
+
+
+def test_si_el_consumidor_falla_la_marca_se_revierte(tmp_path):
+    fabrica = _fabrica(str(tmp_path / "inbox.db"))
+
+    def _rompe(_evento):
+        raise RuntimeError("efecto fallido")
+
+    with pytest.raises(RuntimeError, match="efecto fallido"):
+        with UnidadDeTrabajo(fabrica) as unidad:
+            ProcesadorDeMensajeEntrante(unidad).procesar({"eventId": "e-2"}, _rompe)
+
+    with UnidadDeTrabajo(fabrica) as unidad:
+        assert ProcesadorDeMensajeEntrante(unidad).procesar({"eventId": "e-2"}, lambda evento: None) is True
+
+
+def test_el_consumidor_procesa_una_sola_vez_cada_evento(tmp_path):
+    fabrica = _fabrica(str(tmp_path / "idempotencia.db"))
+    procesados = []
+    with UnidadDeTrabajo(fabrica) as unidad:
+        procesador = ProcesadorDeMensajeEntrante(unidad)
+        assert procesador.procesar({"eventId": "e-1"}, procesados.append) is True
+        assert procesador.procesar({"eventId": "e-1"}, procesados.append) is False
+    assert procesados == [{"eventId": "e-1"}]
+
+    with UnidadDeTrabajo(fabrica) as unidad:  # la marca quedó persistida
+        assert ProcesadorDeMensajeEntrante(unidad).procesar({"eventId": "e-1"}, procesados.append) is False
+    assert len(procesados) == 1
+
+
+def test_los_dobles_en_memoria_no_descartan_ni_duplican():
+    bandeja = BandejaDeSalidaEnMemoria()
+    bandeja.agregar("repuestos.faltante", {"eventId": "ev-m"})
+    publicador = _PublicadorQueFalla()
+    despachador = DespachadorDeBandeja(lambda: bandeja, publicador)
+    for _ in range(3):
+        assert despachador.despachar_una_vez() == 0
+    assert [f["id"] for f in bandeja.pendientes()] == ["ev-m"]
+
+    unidad = UnidadEnMemoria()
+    with unidad:
+        procesador = ProcesadorDeMensajeEntrante(unidad)
+        assert procesador.procesar({"eventId": "e-m"}, lambda evento: None) is True
+    with unidad:
+        assert procesador.procesar({"eventId": "e-m"}, lambda evento: None) is False

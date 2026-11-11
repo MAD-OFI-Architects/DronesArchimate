@@ -12,7 +12,9 @@ El remote se comunica con el shell solo por `CustomEvent` (`mfe:notify`, `mfe:na
 {% endfor %}
 
 ### Restricciones
-- Sin librerías de UI pesadas; CSS propio mínimo y accesible (etiquetas, foco, contraste).
+- **Diseño:** usa el sistema de diseño ya generado en `src/styles.css` (tokens `--mfe-*` que define el shell) y su vocabulario de clases: `card`, `grid`, `field`, `btn`, `alert`, `ok`, `table`, `badge`, `empty`, `mfe-title`. No inventes colores ni tipografías: usa solo `var(--mfe-…)`. Cada formulario va dentro de `<section className="card">`; cada campo en `<label className="field">`; la consulta del agregado en un `<table className="table">` con estados `badge`.
+- **Estados de interfaz:** cada vista y formulario resuelve cargando (botón `disabled` + texto), vacío (`<p className="empty">`), error (`role="alert" className="alert"`) y éxito (`notify`). Nunca muestres JSON crudo al usuario: tradúcelo a etiquetas legibles en español.
+- Sin librerías de UI pesadas; accesible (etiquetas asociadas, foco visible, contraste, `aria-invalid` en campos con error) y responsive (la rejilla `grid` ya se adapta al ancho).
 - Pruebas con Vitest + Testing Library: por cada `…Form`, que valida y envía el cuerpo correcto (fetch simulado). Quita **todas** las marcas `FORGE-STUB`.
 
 ## Criterio de aceptación (automático)

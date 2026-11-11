@@ -14,6 +14,9 @@ from .util import kebab, pascal
 
 BUS_PORT, SIM_PORT, GATEWAY_PORT = 5100, 5110, 8080
 
+SKELETONS = Path(__file__).parent / "skeletons"
+MARCA_DURABLE = "ARCHIFORGE: mensajeria-durable"
+
 
 # ----------------------------------------------------------------------------- topics
 def topic(context: str, event: str) -> str:
@@ -322,7 +325,36 @@ export async function send<T = unknown>(method: 'GET' | 'POST', path: string, bo
 }
 export const notify = (message: string) => window.dispatchEvent(new CustomEvent('mfe:notify', { detail: { message } }));
 """
-STYLES = ":host{display:block;font-family:system-ui,sans-serif}form{display:grid;gap:.6rem;max-width:34rem;margin:1rem 0}label{display:grid;gap:.2rem;font-weight:600}input,select,textarea,button{font:inherit;padding:.45rem}button{cursor:pointer}[role=alert]{color:#b00020}\n"
+STYLES = """/* Sistema de diseño compartido: el shell define los tokens --mfe-* en :root y atraviesan el Shadow DOM.
+   Los valores de respaldo permiten ejecutar el remote solo (vite dev). Vocabulario de clases: card, field, btn, alert, table, badge, empty. */
+:host{display:block;font-family:var(--mfe-font,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif);color:var(--mfe-text,#1b2430);line-height:1.5}
+*{box-sizing:border-box}
+.mfe{display:grid;gap:var(--mfe-gap,1.25rem)}
+.mfe-title{margin:0;font-size:1.35rem;font-weight:700;letter-spacing:-.01em}
+.mfe-sub{margin:.15rem 0 0;color:var(--mfe-muted,#5b6776);font-size:.9rem}
+.grid{display:grid;gap:var(--mfe-gap,1.25rem);grid-template-columns:repeat(auto-fill,minmax(min(100%,22rem),1fr));align-items:start}
+.card{background:var(--mfe-surface,#fff);border:1px solid var(--mfe-border,#dde3ea);border-radius:var(--mfe-radius,12px);box-shadow:var(--mfe-shadow,0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08));padding:1.1rem 1.25rem}
+.card h3{margin:0 0 .75rem;font-size:1.02rem;font-weight:650}
+form{display:grid;gap:.85rem}
+.field{display:grid;gap:.3rem;font-size:.9rem;font-weight:600}
+.field small{font-weight:400;color:var(--mfe-muted,#5b6776)}
+input,select,textarea{font:inherit;color:inherit;width:100%;padding:.55rem .7rem;background:var(--mfe-bg,#f6f8fb);border:1px solid var(--mfe-border,#dde3ea);border-radius:8px;transition:border-color .15s,box-shadow .15s}
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none;border-color:var(--mfe-primary,#1d4ed8);box-shadow:0 0 0 3px var(--mfe-focus,rgba(29,78,216,.25))}
+input[aria-invalid=true],textarea[aria-invalid=true]{border-color:var(--mfe-danger,#b42318)}
+.check{display:flex;align-items:center;gap:.5rem;font-weight:500}.check input{width:auto}
+.btn,button{font:inherit;font-weight:600;cursor:pointer;padding:.6rem 1rem;border:0;border-radius:8px;background:var(--mfe-primary,#1d4ed8);color:var(--mfe-primary-contrast,#fff);justify-self:start;transition:filter .15s,transform .05s}
+.btn:hover,button:hover:not(:disabled){filter:brightness(1.08)}.btn:active,button:active:not(:disabled){transform:translateY(1px)}
+button:focus-visible{outline:3px solid var(--mfe-focus,rgba(29,78,216,.45));outline-offset:2px}
+button:disabled{opacity:.55;cursor:progress}
+.btn-ghost{background:transparent;color:var(--mfe-primary,#1d4ed8);border:1px solid var(--mfe-border,#dde3ea)}
+.alert,[role=alert]{margin:0;padding:.6rem .8rem;border-radius:8px;font-size:.9rem;background:var(--mfe-danger-bg,#fdecea);color:var(--mfe-danger,#b42318);border:1px solid var(--mfe-danger,#b42318)}
+.ok{padding:.6rem .8rem;border-radius:8px;background:var(--mfe-success-bg,#e7f6ec);color:var(--mfe-success,#05603a)}
+.table{width:100%;border-collapse:collapse;font-size:.9rem}.table th,.table td{text-align:left;padding:.5rem .6rem;border-bottom:1px solid var(--mfe-border,#dde3ea)}
+.table th{color:var(--mfe-muted,#5b6776);font-weight:600;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em}
+.badge{display:inline-block;padding:.1rem .55rem;border-radius:999px;font-size:.75rem;font-weight:650;background:var(--mfe-badge-bg,#e0e9ff);color:var(--mfe-primary,#1d4ed8)}
+.empty{padding:1.2rem;text-align:center;color:var(--mfe-muted,#5b6776);border:1px dashed var(--mfe-border,#dde3ea);border-radius:var(--mfe-radius,12px)}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:.35rem 1rem;margin:0}dt{font-weight:600;color:var(--mfe-muted,#5b6776)}dd{margin:0}
+"""
 SETUP = "import '@testing-library/jest-dom/vitest';\n"
 
 
@@ -349,13 +381,15 @@ export function {name}() {{
     }}
   }}
   return (
-    <form onSubmit={{onSubmit}} aria-label="{cm['command']}">
-      <h3>{cm['command']}</h3>
-      <label>Identificador<input value={{id}} onChange={{(e) => setId(e.target.value)}} /></label>
-      <label>Cuerpo (JSON)<textarea value={{body}} onChange={{(e) => setBody(e.target.value)}} /></label>
-      <button type="submit">{cm['command']}</button>
-      {{error && <p role="alert">{{error}}</p>}}
-    </form>
+    <section className="card">
+      <form onSubmit={{onSubmit}} aria-label="{cm['command']}">
+        <h3>{cm['command']}</h3>
+        <label className="field">Identificador<input value={{id}} onChange={{(e) => setId(e.target.value)}} /></label>
+        <label className="field">Cuerpo (JSON)<textarea rows={{4}} value={{body}} onChange={{(e) => setBody(e.target.value)}} /></label>
+        <button type="submit">{cm['command']}</button>
+        {{error && <p role="alert" className="alert">{{error}}</p>}}
+      </form>
+    </section>
   );
 }}
 """
@@ -391,15 +425,38 @@ def scaffold_remote(cfg: Config, manifest: dict, r: dict) -> list[str]:
     app = ("\n".join(imports) + "\n\n// FORGE-STUB: la etapa de microfrontends añade aquí la vista de consulta de cada rol.\n"
            "const FORMS: { roles: string[]; node: JSX.Element }[] = [\n" + "\n".join(entries) + "\n];\n\n"
            f"/** `role` llega del shell (atributo data-role); vacío = todos los formularios de «{r['context']}». */\n"
-           "export function App({ role }: { role: string }) {\n  return (\n    <main>\n"
-           f"      <h2>{r['context']}{{role ? ` · ${{role}}` : ''}}</h2>\n"
-           "      {FORMS.filter((f) => !role || f.roles.includes(role)).map((f) => f.node)}\n    </main>\n  );\n}\n")
+           "export function App({ role }: { role: string }) {\n  return (\n    <main className=\"mfe\">\n"
+           f"      <header><h2 className=\"mfe-title\">{r['context']}</h2>{{role && <p className=\"mfe-sub\">{{role}}</p>}}</header>\n"
+           "      <div className=\"grid\">{FORMS.filter((f) => !role || f.roles.includes(role)).map((f) => f.node)}</div>\n    </main>\n  );\n}\n")
     (d / "src" / "App.tsx").write_text(app, encoding="utf-8")
     (d / "mfe.json").write_text(json.dumps({"tag": r["slug"], "context": r["context"], "roles": sorted(r["roles"])}, indent=2, ensure_ascii=False), encoding="utf-8")
     return [f"frontend/{r['slug']}"]
 
 
-SHELL_MAIN = """interface Entry { tag: string; module: string; context: string; roles: string[] }
+SHELL_CSS = """/* Tokens del sistema de diseño: los remotes (Shadow DOM) los heredan como custom properties. */
+:root{--mfe-font:Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;--mfe-bg:#f4f6fa;--mfe-surface:#fff;--mfe-text:#1b2430;--mfe-muted:#5b6776;
+--mfe-border:#dde3ea;--mfe-primary:#1d4ed8;--mfe-primary-contrast:#fff;--mfe-focus:rgba(29,78,216,.28);--mfe-danger:#b42318;--mfe-danger-bg:#fdecea;
+--mfe-success:#05603a;--mfe-success-bg:#e7f6ec;--mfe-badge-bg:#e0e9ff;--mfe-radius:12px;--mfe-gap:1.25rem;--mfe-shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
+color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--mfe-bg:#0e1420;--mfe-surface:#161e2e;--mfe-text:#e6ebf2;--mfe-muted:#9aa7b8;--mfe-border:#2a3548;--mfe-primary:#6c9bff;
+--mfe-primary-contrast:#0b1220;--mfe-focus:rgba(108,155,255,.35);--mfe-danger:#ff8a80;--mfe-danger-bg:#3a1d1b;--mfe-success:#7ee2a8;--mfe-success-bg:#12301f;--mfe-badge-bg:#1e2f57}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--mfe-bg);color:var(--mfe-text);font-family:var(--mfe-font);line-height:1.5}
+.shell-header{position:sticky;top:0;z-index:10;display:flex;flex-wrap:wrap;gap:.75rem 1.5rem;align-items:center;justify-content:space-between;padding:.75rem clamp(1rem,4vw,2rem);
+background:var(--mfe-surface);border-bottom:1px solid var(--mfe-border)}
+.brand{display:flex;align-items:center;gap:.6rem;font-weight:700;font-size:1.05rem}.brand i{display:inline-grid;place-items:center;width:2rem;height:2rem;border-radius:9px;background:var(--mfe-primary);color:var(--mfe-primary-contrast);font-style:normal}
+.role{display:flex;align-items:center;gap:.6rem;font-size:.85rem;color:var(--mfe-muted)}
+.role select{font:inherit;color:var(--mfe-text);background:var(--mfe-bg);border:1px solid var(--mfe-border);border-radius:8px;padding:.45rem .7rem}
+.role select:focus-visible{outline:3px solid var(--mfe-focus)}
+.shell-main{max-width:76rem;margin:0 auto;padding:clamp(1rem,3vw,2rem);display:grid;gap:2rem}
+#toast{position:fixed;right:1rem;bottom:1rem;max-width:min(24rem,calc(100vw - 2rem));padding:.7rem 1rem;border-radius:10px;background:var(--mfe-text);color:var(--mfe-bg);box-shadow:0 8px 24px rgba(0,0,0,.25)}
+[hidden]{display:none!important}
+"""
+
+
+SHELL_MAIN = """import './shell.css';
+
+interface Entry { tag: string; module: string; context: string; roles: string[] }
 const outlet = document.getElementById('outlet')!;
 const select = document.getElementById('role') as HTMLSelectElement;
 const toast = document.getElementById('toast')!;
@@ -441,11 +498,13 @@ def scaffold_shell(cfg: Config) -> list[str]:
     (sh / "tsconfig.json").write_text(json.dumps({"compilerOptions": {"target": "ES2020", "lib": ["ES2020", "DOM"], "module": "ESNext",
                                                                       "moduleResolution": "bundler", "strict": True, "skipLibCheck": True,
                                                                       "noEmit": True}, "include": ["src"]}, indent=2), encoding="utf-8")
-    (sh / "index.html").write_text('<!doctype html>\n<html lang="es"><head><meta charset="utf-8"><title>Mantenimiento preventivo de drones</title>\n'
-                                   '<style>body{font-family:system-ui,sans-serif;margin:0}header{display:flex;gap:1rem;align-items:center;padding:.8rem 1rem;background:#12343b;color:#fff}'
-                                   'main{padding:1rem}#toast{position:fixed;bottom:1rem;right:1rem;background:#12343b;color:#fff;padding:.6rem 1rem;border-radius:6px}[hidden]{display:none}</style></head>\n'
-                                   '<body><header><strong>AgroDrones · Mantenimiento</strong><label>Rol <select id="role"></select></label></header>\n'
-                                   '<main id="outlet"></main><div id="toast" role="status" hidden></div>\n<script type="module" src="/src/main.ts"></script></body></html>\n', encoding="utf-8")
+    (sh / "index.html").write_text('<!doctype html>\n<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+                                   '<title>Mantenimiento preventivo de drones</title></head>\n'
+                                   '<body><header class="shell-header"><div class="brand"><i aria-hidden="true">✈</i>AgroDrones · Mantenimiento</div>'
+                                   '<label class="role">Rol <select id="role"></select></label></header>\n'
+                                   '<main class="shell-main" id="outlet"></main><div id="toast" role="status" hidden></div>\n'
+                                   '<script type="module" src="/src/main.ts"></script></body></html>\n', encoding="utf-8")
+    (sh / "src" / "shell.css").write_text(SHELL_CSS, encoding="utf-8")
     (sh / "src" / "main.ts").write_text(SHELL_MAIN, encoding="utf-8")
     (sh / "public" / "mfe-manifest.json").write_text(json.dumps(
         [{"tag": m["tag"], "context": m["context"], "roles": m["roles"], "module": f"/mfe/{m['tag']}/{m['tag']}.js"} for m in metas],
@@ -523,6 +582,34 @@ def smoke_dir(cfg: Config, d) -> Path:
     return cfg.out / ".platform" / d.slug
 
 
+def modulo_durable(d) -> str:
+    """Ruta de import (relativa al paquete) del módulo durable: respeta la arquitectura decidida."""
+    return "infrastructure.mensajeria" if d.architecture == "clean-ddd" else "adapters.outbound.mensajeria"
+
+
+def durable_files(cfg: Config, d) -> dict[str, str]:
+    """Esqueletos deterministas de outbox/inbox durable (python + outbox): ruta relativa al servicio -> contenido.
+
+    El módulo y sus pruebas canónicas son la fuente de verdad del patrón: los agentes los cablean,
+    no los reimplementan. La puerta `outbox_gate` restaura y ejecuta las pruebas canónicas.
+    """
+    if d.language != "python" or not d.uses("outbox"):
+        return {}
+    paquete = d.slug.replace("-", "_")
+    modulo = modulo_durable(d)
+    archivos = {
+        f"src/{paquete}/__init__.py": "",
+        f"src/{paquete}/{modulo.replace('.', '/')}.py": (SKELETONS / "mensajeria.py.tmpl").read_text(encoding="utf-8"),
+        "tests/test_mensajeria_durable.py": (SKELETONS / "test_mensajeria.py.tmpl").read_text(encoding="utf-8")
+        .replace("__PAQUETE__", paquete).replace("__MODULO__", modulo),
+    }
+    acumulado = f"src/{paquete}"
+    for parte in modulo.split(".")[:-1]:
+        acumulado += f"/{parte}"
+        archivos.setdefault(f"{acumulado}/__init__.py", "")
+    return archivos
+
+
 def domain_scaffold(cfg: Config, ir: dict, manifest: dict) -> list[str]:
     """S02 (determinista) para UN dominio: metadatos, copia de sus decisiones, esqueleto del microfrontend y plataforma de humo aislada."""
     import shutil
@@ -543,6 +630,13 @@ def domain_scaffold(cfg: Config, ir: dict, manifest: dict) -> list[str]:
     (out / ".gitignore").write_text("bin/\nobj/\nnode_modules/\ndist/\n.venv/\n__pycache__/\n*.pyc\n.pytest_cache/\nTestResults/\ntarget/\n.env\n.platform/\n", encoding="utf-8")
     (out / "docs" / d.slug / "supuestos.md").write_text(f"# Supuestos de diseño — {d.context}\n\n- Los campos de los eventos entre contextos son supuestos (ver `contrato-bus.md`): el modelo ArchiMate no los define.\n", encoding="utf-8")
     created = []
+    for rel, contenido in durable_files(cfg, d).items():
+        destino = svc / rel
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        if rel.endswith("__init__.py") and destino.exists():
+            continue
+        destino.write_text(contenido, encoding="utf-8")
+        created.append(f"{d.dir}/{rel}")
     for r in manifest["frontend"]["remotes"]:
         created += scaffold_remote(cfg, manifest, r)
     created += platform(cfg, ir, manifest, smoke_dir(cfg, d), "../../services", with_frontend=False)
