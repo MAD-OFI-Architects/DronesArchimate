@@ -306,3 +306,30 @@ def test_design_gate_rejects_unstyled_remote(tmp_path):
     g = G.design_gate(cfg, "frontend/mfe-x")
     assert not g.ok and "tokens" in g.detail and "estilos en línea" in g.detail
     assert not G.shell_design_gate(cfg).ok
+
+
+def test_parallel_build_forwards_stage_selection_to_each_domain():
+    """Regresión: `build A B --only S40 --force` repetía el pipeline entero porque el subproceso no recibía --only/--force."""
+    import argparse
+    from forge import cli
+    cfg = config.load(ROOT / "forge.toml")
+    a = argparse.Namespace(laps=2, wait=5, only="S40-microfrontend", from_=None, until=None, force=True, skip_permissions=False)
+    cmd = cli.child_build_cmd(cfg, ["forge.toml"], dom("Intervenciones"), a)
+    assert cmd[cmd.index("--only") + 1] == "S40-microfrontend" and "--force" in cmd and "--from" not in cmd
+    a2 = argparse.Namespace(laps=1, wait=5, only=None, from_="S30-smoke", until="S40-microfrontend", force=False, skip_permissions=True)
+    cmd = cli.child_build_cmd(cfg, ["forge.toml"], dom("Intervenciones"), a2)
+    assert cmd[cmd.index("--from") + 1] == "S30-smoke" and cmd[cmd.index("--until") + 1] == "S40-microfrontend"
+    assert "--force" not in cmd and "--only" not in cmd and "--skip-permissions" in cmd
+
+
+def test_ensure_design_system_migrates_legacy_css_and_keeps_extended_css(tmp_path):
+    from forge import scaffold
+    cfg = dataclasses.replace(config.load(ROOT / "forge.toml"), out=tmp_path)
+    assert scaffold.ensure_design_system(cfg, "x") is False                       # sin remote: no hace nada
+    _write(tmp_path, "frontend/mfe-x/src/styles.css", ":host{display:block}form{display:grid}\n")
+    assert scaffold.ensure_design_system(cfg, "x") is True                        # CSS viejo: se migra
+    migrated = (tmp_path / "frontend/mfe-x/src/styles.css").read_text(encoding="utf-8")
+    assert migrated.count("var(--mfe-") >= 10
+    (tmp_path / "frontend/mfe-x/src/styles.css").write_text(migrated + ".extra{color:var(--mfe-text)}\n", encoding="utf-8")
+    assert scaffold.ensure_design_system(cfg, "x") is False                       # ya usa tokens: no pisa la ampliación
+    assert ".extra" in (tmp_path / "frontend/mfe-x/src/styles.css").read_text(encoding="utf-8")

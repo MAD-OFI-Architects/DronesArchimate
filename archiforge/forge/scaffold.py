@@ -454,6 +454,18 @@ background:var(--mfe-surface);border-bottom:1px solid var(--mfe-border)}
 """
 
 
+def ensure_design_system(cfg: Config, slug: str) -> bool:
+    """Migra un remote generado antes del sistema de diseño: si su styles.css no usa los tokens --mfe-*, lo reemplaza por el
+    actual. Idempotente: no toca un styles.css que ya los usa (el agente puede haberlo ampliado). Devuelve si cambió algo."""
+    css = cfg.out / "frontend" / f"mfe-{slug}" / "src" / "styles.css"
+    if not css.parent.exists():
+        return False
+    if css.exists() and css.read_text(encoding="utf-8", errors="ignore").count("var(--mfe-") >= 10:
+        return False
+    css.write_text(STYLES, encoding="utf-8")
+    return True
+
+
 SHELL_MAIN = """import './shell.css';
 
 interface Entry { tag: string; module: string; context: string; roles: string[] }

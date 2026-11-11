@@ -176,6 +176,21 @@ def build_one(cfg: config.Config, d: Domain, a) -> int:
     return 1
 
 
+def child_build_cmd(cfg: config.Config, argv0: list[str], d: Domain, a) -> list[str]:
+    """Orden del subproceso de un dominio al construir varios en paralelo. Debe reenviar TODAS las opciones de `build`
+    que cambian qué se ejecuta (--only/--from/--until/--force); si no, el subproceso repite el pipeline entero."""
+    cmd = [sys.executable, "-m", "forge", "-c", str(cfg.root / argv0[0]), "build", d.context, "--skip-doctor", "--laps", str(a.laps),
+           "--wait", str(a.wait)]
+    for flag, val in (("--only", a.only), ("--from", a.from_), ("--until", a.until)):
+        if val:
+            cmd += [flag, val]
+    if a.force:
+        cmd.append("--force")
+    if a.skip_permissions:
+        cmd.append("--skip-permissions")
+    return cmd
+
+
 def cmd_build(cfg: config.Config, a, argv0: list[str]) -> int:
     doms = [_need_domain(cfg, n) for n in a.names]
     if not a.skip_doctor and cfg.strict_tools and not doctor(cfg, doms):
@@ -185,8 +200,7 @@ def cmd_build(cfg: config.Config, a, argv0: list[str]) -> int:
         return build_one(cfg, doms[0], a)
 
     def launch(d: Domain) -> int:     # cada dominio en su propio proceso: estado, logs y puertos propios
-        cmd = [sys.executable, "-m", "forge", "-c", str(cfg.root / argv0[0]), "build", d.context, "--skip-doctor", "--laps", str(a.laps),
-               "--wait", str(a.wait)] + (["--skip-permissions"] if a.skip_permissions else [])
+        cmd = child_build_cmd(cfg, argv0, d, a)
         p = subprocess.Popen(cmd, cwd=cfg.root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
         for line in p.stdout:  # type: ignore[union-attr]
             print(f"[{d.slug}] {line.rstrip()}", flush=True)

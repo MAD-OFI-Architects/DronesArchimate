@@ -162,6 +162,8 @@ class Runner:
         return f
 
     def attempt_agent(self, stage: Stage, n: int, feedback: str) -> list[G.Gate]:
+        if stage.id.startswith("S40") and scaffold.ensure_design_system(self.cfg, self.domain.slug):
+            self.log("  sistema de diseño: styles.css migrado a los tokens --mfe-* (el remote era anterior al diseño)")
         work = self.render(stage, feedback)
         log = self.fdir / "logs" / f"{stage.id}-intento{n}.log"
         # OpenCode V2: cada etapa se ejecuta con su agente forge-* (lenguaje/especialidad de la etapa).
