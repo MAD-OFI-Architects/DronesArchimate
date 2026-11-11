@@ -12,15 +12,15 @@ pipeline = true
 memento = true
 state = true
 specification = true
-eventos = true
 outbox = true
+eventos = true
 acl = true
-cifrado = true
 cache = true
+cifrado = true
 
 [justificacion]   # tus razones; el ADR las cita tal cual
-lenguaje = "Ejemplo: C# por tipado fuerte y soporte de DDD."
-arquitectura = "Ejemplo: Clean+DDD por la riqueza de reglas del agregado Orden de trabajo."
-estilo = "Ejemplo: microservicio con eventos; consume y publica eventos del ciclo de la OT."
-base_de_datos = "Ejemplo: MongoDB; el agregado se guarda como documento (memento) con transacciones en replica set."
+lenguaje = "C# por tipado fuerte y soporte de DDD."
+arquitectura = "Clean+DDD por la riqueza de reglas del agregado Orden de trabajo."
+estilo = "microservicio con eventos; consume y publica eventos del ciclo de la OT."
+base_de_datos = "MongoDB; el agregado se guarda como documento (memento) con transacciones en replica set."
 cache = "Decorador de repositorio de lectura sobre Orden de trabajo: el shell del microfrontend consulta la OT con frecuencia y la caché se invalida al escribir."
