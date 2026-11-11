@@ -67,6 +67,45 @@ def emitir(contexto, evento, payload):
                       check=lambda value: value.get("accepted") is True)
 
 
+TOPICO_FALTANTE = "repuestos-del-taller.faltante-detectado.v1"
+
+
+def suscriptores(topico: str):
+    config = eventually("GET", "/bus/topics")
+    for entrada in config.get("topics", []):
+        if entrada["topic"] == topico:
+            return [s["url"] for s in entrada["subscribers"]]
+    return []
+
+
+def entrega_confirmada(eventos):
+    for evento in eventos:
+        if evento.get("topic") != TOPICO_FALTANTE:
+            continue
+        entregas = evento.get("delivered") or {}
+        if entregas and all(entregas.values()):
+            return evento
+    return None
+
+
+def verificar_faltante(referencia: str) -> str:
+    """Quien recibe Faltante detectado depende de la plataforma. Aislada: un simulador,
+    y el payload se ve en /sim/received. Ensamblada: el dominio real Intervenciones,
+    y la prueba es que el bus haya entregado el evento."""
+    urls = suscriptores(TOPICO_FALTANTE)
+    require(urls, f"nadie está suscripto a {TOPICO_FALTANTE}")
+    if any("simulator" in url for url in urls):
+        recibidos = eventually("GET", "/sim/received",
+                               check=lambda valor: any(i.get("topic") == TOPICO_FALTANTE for i in valor))
+        payload = next(i for i in recibidos if i["topic"] == TOPICO_FALTANTE)["envelope"]["payload"]
+        require(payload["referencia"] == referencia and payload["cantidadFaltante"] == 2,
+                f"payload de Faltante detectado inesperado: {payload}")
+        return "simulador"
+    eventos = eventually("GET", "/bus/events", check=lambda valor: entrega_confirmada(valor) is not None)
+    evento = entrega_confirmada(eventos)
+    return f"bus, {len(evento.get('subscribers') or [])} suscriptor(es)"
+
+
 def reservada(existencia) -> int:
     return sum(reserva["cantidad"] for reserva in existencia.get("reservas", []))
 
@@ -109,14 +148,8 @@ def main() -> int:
     faltante = dict(parada, tareas=[{"tareaId": "T-102", "descripcion": "Faltante",
                                      "repuestos": [{"referencia": reference, "cantidad": 5}]}])
     emitir("plan-de-mantenimiento", "parada-programada", faltante)
-    received = eventually("GET", "/sim/received",
-                          check=lambda value: any(item.get("topic") == "repuestos-del-taller.faltante-detectado.v1"
-                                                   for item in value))
-    payload = next(item for item in received
-                   if item["topic"] == "repuestos-del-taller.faltante-detectado.v1")["envelope"]["payload"]
-    require(payload["referencia"] == reference and payload["cantidadFaltante"] == 2,
-            f"payload de Faltante detectado inesperado: {payload}")
-    steps.append("faltante detectado -> suscriptor")
+    destino = verificar_faltante(reference)
+    steps.append(f"faltante detectado -> {destino}")
 
     user_ref = "USER-REF"
     eventually("POST", "/api/repuestos/existencia", {
