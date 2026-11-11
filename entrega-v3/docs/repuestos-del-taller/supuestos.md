@@ -6,3 +6,5 @@
 - Los consumidores deduplican por `eventId` en memoria; el modelo no define un almacén de mensajes procesados.
 - Esquema PostgreSQL: dos tablas (`existencia`, `solicitud_de_reposicion`) que guardan el memento del agregado como JSON; se crean al iniciar (`CREATE TABLE IF NOT EXISTS`), sin migraciones, por tamaño del contexto. Se prueba con sqlite3 porque no hay servidor PostgreSQL en el entorno de revisión.
 - `CifradorAes` exige `cryptography` (ya declarada en `pyproject.toml`); se eliminó el fallback XOR+HMAC. Si `CIFRADO_CLAVE` falta usa una clave local derivada: aceptable solo en desarrollo.
+- El `DATABASE_URL` del compose viene en formato de SQLAlchemy (`postgresql+psycopg://…`); el servicio lo normaliza a `postgresql://` antes de `psycopg.connect`, porque el driver no entiende el sufijo de dialecto.
+- El humo usa referencias y solicitudes con sufijo aleatorio por corrida: repetirlo sobre la misma base no altera las cifras de stock que verifica.

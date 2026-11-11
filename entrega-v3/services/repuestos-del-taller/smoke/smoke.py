@@ -1,4 +1,12 @@
-"""Smoke end-to-end del dominio usando solo urllib y la plataforma ensamblada."""
+"""Humo del dominio «Repuestos del Taller» contra su plataforma de humo.
+
+Solo biblioteca estándar (``urllib``). Recorre, en orden, los eventos que el
+servicio consume, los comandos de usuario de su API y la entrega del evento que
+publica. Cada paso espera con reintento (máximo 60 s) y falla con código 1 si
+algo no ocurrió.
+
+Uso: ``GATEWAY_URL=http://localhost:8080 python smoke/smoke.py``
+"""
 from __future__ import annotations
 
 import json
@@ -9,41 +17,28 @@ import urllib.error
 import urllib.request
 import uuid
 
-
 BASE = os.environ.get("GATEWAY_URL", "http://localhost:8080").rstrip("/")
+ESPERA_MAXIMA = 60.0
+TOPICO_FALTANTE = "repuestos-del-taller.faltante-detectado.v1"
 
 
-def call(method: str, path: str, payload=None):
-    data = None if payload is None else json.dumps(payload).encode()
-    request = urllib.request.Request(BASE + path, data=data, method=method,
-                                     headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(request, timeout=5) as response:
-        return response.status, json.loads(response.read() or b"{}")
+class Fallo(RuntimeError):
+    """Un paso del escenario no se cumplió dentro del plazo."""
 
 
-def eventually(method: str, path: str, payload=None, check=lambda _: True, seconds=60):
-    deadline = time.monotonic() + seconds
-    last = None
-    while time.monotonic() < deadline:
-        try:
-            last = call(method, path, payload)
-            if check(last[1]):
-                return last[1]
-        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as error:
-            last = error
-        time.sleep(0.5)
-    raise RuntimeError(f"Timeout esperando {method} {path}: {last}")
+def require(condicion, mensaje: str) -> None:
+    if not condicion:
+        raise Fallo(mensaje)
 
 
-def require(condition, message):
-    if not condition:
-        raise RuntimeError(message)
-
-
-def respuesta(method: str, path: str, payload=None):
-    """Como call, pero devuelve (status, cuerpo) también en respuestas 4xx/5xx."""
+def _peticion(metodo: str, ruta: str, payload=None):
+    """Devuelve ``(status, cuerpo)``; los 4xx/5xx se devuelven, no se levantan."""
+    datos = None if payload is None else json.dumps(payload).encode()
+    peticion = urllib.request.Request(BASE + ruta, data=datos, method=metodo,
+                                      headers={"Content-Type": "application/json"})
     try:
-        return call(method, path, payload)
+        with urllib.request.urlopen(peticion, timeout=10) as respuesta:
+            return respuesta.status, json.loads(respuesta.read() or b"{}")
     except urllib.error.HTTPError as error:
         texto = error.read().decode() or "{}"
         try:
@@ -52,138 +47,233 @@ def respuesta(method: str, path: str, payload=None):
             return error.code, {"error": texto}
 
 
-def emitir(contexto, evento, payload):
+def esperar(descripcion: str, ruta: str, cumple=lambda cuerpo: True):
+    """Reintenta un GET hasta que su cuerpo cumpla la condición."""
+    limite = time.monotonic() + ESPERA_MAXIMA
+    ultimo = "sin respuesta"
+    while time.monotonic() < limite:
+        try:
+            estado, cuerpo = _peticion("GET", ruta)
+        except (urllib.error.URLError, TimeoutError, OSError) as error:
+            ultimo = error
+        else:
+            if estado < 400 and cumple(cuerpo):
+                return cuerpo
+            ultimo = f"HTTP {estado} {cuerpo}"
+        time.sleep(0.5)
+    raise Fallo(f"{descripcion}: {ultimo}")
+
+
+def comando(descripcion: str, ruta: str, payload=None, cumple=lambda cuerpo: True):
+    """Ejecuta un POST una sola vez por intento: reintenta solo si no hubo respuesta HTTP."""
+    limite = time.monotonic() + ESPERA_MAXIMA
+    ultimo = "sin respuesta"
+    while time.monotonic() < limite:
+        try:
+            estado, cuerpo = _peticion("POST", ruta, payload)
+        except (urllib.error.URLError, TimeoutError, OSError) as error:
+            ultimo = error
+            time.sleep(0.5)
+            continue
+        if estado < 400 and cumple(cuerpo):
+            return cuerpo
+        raise Fallo(f"{descripcion}: HTTP {estado} {cuerpo}")
+    raise Fallo(f"{descripcion}: {ultimo}")
+
+
+def emitir(contexto: str, evento: str, payload: dict) -> None:
+    """Dispara un evento por el simulador; si no hay simulador, publica en el bus."""
     ruta = f"/sim/simulate/{contexto}/{evento}"
-    status, response = respuesta("POST", ruta, payload)
-    if status == 202:
-        return response
-    if status != 404:
-        raise RuntimeError(f"{ruta} respondió {status}: {response}")
-    envelope = {"eventId": str(uuid.uuid4()),
-                "topic": f"{contexto}.{evento}.v1",
-                "occurredOn": "2026-11-20T08:00:00Z",
-                "correlationId": str(uuid.uuid4()), "payload": payload}
-    return eventually("POST", "/bus/publish", envelope,
-                      check=lambda value: value.get("accepted") is True)
+    estado, cuerpo = _peticion("POST", ruta, payload)
+    if estado == 202:
+        return
+    if estado != 404:
+        raise Fallo(f"{ruta} respondió {estado}: {cuerpo}")
+    sobre = {"eventId": str(uuid.uuid4()), "topic": f"{contexto}.{evento}.v1",
+             "occurredOn": "2026-11-20T08:00:00Z",
+             "correlationId": str(uuid.uuid4()), "payload": payload}
+    comando("publicar en el bus", "/bus/publish", sobre,
+            cumple=lambda valor: valor.get("accepted") is True)
 
 
-TOPICO_FALTANTE = "repuestos-del-taller.faltante-detectado.v1"
-
-
-def suscriptores(topico: str):
-    config = eventually("GET", "/bus/topics")
+def suscriptores(topico: str) -> list[str]:
+    config = esperar(f"tópicos del bus ({topico})", "/bus/topics")
     for entrada in config.get("topics", []):
-        if entrada["topic"] == topico:
-            return [s["url"] for s in entrada["subscribers"]]
+        if entrada.get("topic") == topico:
+            return [suscriptor["url"] for suscriptor in entrada.get("subscribers", [])]
     return []
 
 
-def entrega_confirmada(eventos):
-    for evento in eventos:
-        if evento.get("topic") != TOPICO_FALTANTE:
+def _faltante_de(recibidos, referencia: str):
+    for item in recibidos:
+        if item.get("topic") != TOPICO_FALTANTE:
             continue
+        if item.get("envelope", {}).get("payload", {}).get("referencia") == referencia:
+            return item
+    return None
+
+
+def _entrega_confirmada(eventos):
+    for evento in eventos:
         entregas = evento.get("delivered") or {}
-        if entregas and all(entregas.values()):
+        if evento.get("topic") == TOPICO_FALTANTE and entregas and all(entregas.values()):
             return evento
     return None
 
 
-def verificar_faltante(referencia: str) -> str:
-    """Quien recibe Faltante detectado depende de la plataforma. Aislada: un simulador,
-    y el payload se ve en /sim/received. Ensamblada: el dominio real Intervenciones,
-    y la prueba es que el bus haya entregado el evento."""
+def verificar_faltante(referencia: str, cantidad: int, parada_id: str) -> str:
+    """Quien recibe Faltante detectado depende de la plataforma: en la aislada es el
+    simulador (``/sim/received``); en la ensamblada es el dominio real (log del bus)."""
     urls = suscriptores(TOPICO_FALTANTE)
     require(urls, f"nadie está suscripto a {TOPICO_FALTANTE}")
     if any("simulator" in url for url in urls):
-        recibidos = eventually("GET", "/sim/received",
-                               check=lambda valor: any(i.get("topic") == TOPICO_FALTANTE for i in valor))
-        payload = next(i for i in recibidos if i["topic"] == TOPICO_FALTANTE)["envelope"]["payload"]
-        require(payload["referencia"] == referencia and payload["cantidadFaltante"] == 2,
+        recibidos = esperar("entrega de Faltante detectado a los simuladores", "/sim/received",
+                            lambda valor: _faltante_de(valor, referencia) is not None)
+        sobre = _faltante_de(recibidos, referencia)["envelope"]
+        require(sobre.get("topic") == TOPICO_FALTANTE, f"sobre con tópico inesperado: {sobre}")
+        require(sobre.get("occurredOn") and sobre.get("correlationId"),
+                f"el sobre no cumple el contrato del bus: {sobre}")
+        payload = sobre.get("payload", {})
+        require(payload.get("paradaId") == parada_id and payload.get("referencia") == referencia
+                and payload.get("cantidadFaltante") == cantidad,
                 f"payload de Faltante detectado inesperado: {payload}")
         return "simulador"
-    eventos = eventually("GET", "/bus/events", check=lambda valor: entrega_confirmada(valor) is not None)
-    evento = entrega_confirmada(eventos)
-    return f"bus, {len(evento.get('subscribers') or [])} suscriptor(es)"
+    eventos = esperar("entrega de Faltante detectado por el bus", "/bus/events",
+                      lambda valor: _entrega_confirmada(valor) is not None)
+    confirmado = _entrega_confirmada(eventos)
+    return f"bus, {len(confirmado.get('subscribers') or [])} suscriptor(es)"
 
 
-def reservada(existencia) -> int:
+def reservada(existencia: dict) -> int:
     return sum(reserva["cantidad"] for reserva in existencia.get("reservas", []))
 
 
-def main() -> int:
-    steps = []
-    eventually("GET", "/api/repuestos/health", check=lambda value: value.get("status") == "ok")
-    steps.append("health")
+def disponible(existencia: dict) -> int:
+    """Existencia usable = física − reservada (invariante del agregado)."""
+    return existencia["fisica"] - reservada(existencia)
 
-    reference = "HEL-T40"
-    eventually("POST", "/api/repuestos/existencia", {
-        "referencia": reference, "cantidad": 5, "stock_minimo": 1, "plazo_dias": 7,
-    })
-    steps.append("registrar entrada")
 
-    parada = {
-        "paradaId": "11111111-1111-4111-8111-111111111111", "dronId": "ADV-03",
-        "fechaProgramada": "2026-11-20T08:00:00Z", "tareas": [{
-            "tareaId": "T-101", "descripcion": "Cambio de helices",
-            "repuestos": [{"referencia": reference, "cantidad": 2}],
-        }],
-    }
+def existencia_de(referencia: str, descripcion: str, cumple):
+    return esperar(f"{descripcion} ({referencia})", f"/api/repuestos/existencia/{referencia}", cumple)
+
+
+def solicitud_de(solicitud_id: str, cumple):
+    return esperar("estado de la solicitud", f"/api/repuestos/solicitud-de-reposicion/{solicitud_id}", cumple)
+
+
+def historial_de_eventos(pasos: list[str], sufijo: str) -> None:
+    repuesto = f"HEL-T40-{sufijo}"
+
+    comando("registrar entrada de repuesto", "/api/repuestos/existencia",
+            {"referencia": repuesto, "cantidad": 5, "stock_minimo": 1, "plazo_dias": 7})
+    existencia = existencia_de(repuesto, "existencia registrada", lambda valor: valor.get("fisica") == 5)
+    require(disponible(existencia) == 5 and existencia["estado"] == "disponible",
+            f"existencia inicial inesperada: {existencia}")
+    pasos.append("registrar entrada -> física 5, disponible 5")
+
+    parada = {"paradaId": str(uuid.uuid4()), "dronId": "ADV-03",
+              "fechaProgramada": "2026-11-20T08:00:00Z",
+              "tareas": [{"tareaId": "T-101", "descripcion": "Cambio de helices",
+                          "repuestos": [{"referencia": repuesto, "cantidad": 2}]}]}
     emitir("plan-de-mantenimiento", "parada-programada", parada)
-    existencia = eventually("GET", f"/api/repuestos/existencia/{reference}",
-                            check=lambda value: len(value.get("reservas", [])) == 1)
-    require(reservada(existencia) == 2 and existencia["fisica"] == 5, "la parada no reservó stock")
-    steps.append("parada programada -> reserva")
+    existencia = existencia_de(repuesto, "reserva de la parada",
+                               lambda valor: len(valor.get("reservas", [])) == 1)
+    require(reservada(existencia) == 2 and disponible(existencia) == 3
+            and existencia["estado"] == "reservado", f"la parada no reservó stock: {existencia}")
+    pasos.append("parada programada -> reserva de 2, disponible 3")
 
-    orden = {
-        "ordenId": "22222222-2222-4222-8222-222222222222", "paradaId": parada["paradaId"],
-        "dronId": "ADV-03", "cerradaEn": "2026-11-20T15:30:00Z", "horasHombre": 3.5,
-        "consumos": [{"referencia": reference, "cantidad": 2, "numeroSerie": None}],
-    }
+    orden = {"ordenId": str(uuid.uuid4()), "paradaId": parada["paradaId"], "dronId": "ADV-03",
+             "cerradaEn": "2026-11-20T15:30:00Z", "horasHombre": 3.5,
+             "consumos": [{"referencia": repuesto, "cantidad": 2, "numeroSerie": None}]}
     emitir("intervenciones", "orden-de-trabajo-cerrada", orden)
-    existencia = eventually("GET", f"/api/repuestos/existencia/{reference}",
-                            check=lambda value: value.get("fisica") == 3 and not value.get("reservas"))
-    require(reservada(existencia) == 0, "la OT no confirmó el consumo")
-    steps.append("orden cerrada -> consumo")
+    existencia = existencia_de(repuesto, "consumo de la orden cerrada",
+                               lambda valor: valor.get("fisica") == 3 and not valor.get("reservas"))
+    require(existencia["estado"] == "consumido" and disponible(existencia) == 3,
+            f"la OT no confirmó el consumo: {existencia}")
+    pasos.append("orden de trabajo cerrada -> consumo, física 3")
 
     faltante = dict(parada, tareas=[{"tareaId": "T-102", "descripcion": "Faltante",
-                                     "repuestos": [{"referencia": reference, "cantidad": 5}]}])
+                                     "repuestos": [{"referencia": repuesto, "cantidad": 5}]}])
     emitir("plan-de-mantenimiento", "parada-programada", faltante)
-    destino = verificar_faltante(reference)
-    steps.append(f"faltante detectado -> {destino}")
+    destino = verificar_faltante(repuesto, 2, faltante["paradaId"])
+    pasos.append(f"parada sin stock -> Faltante detectado entregado ({destino})")
 
-    user_ref = "USER-REF"
-    eventually("POST", "/api/repuestos/existencia", {
-        "referencia": user_ref, "cantidad": 4, "stock_minimo": 1, "plazo_dias": 3,
-    })
-    eventually("POST", f"/api/repuestos/existencia/{user_ref}/reservar-repuesto",
-               {"orden_trabajo_id": "USER-OT", "cantidad": 1})
-    eventually("POST", f"/api/repuestos/existencia/{user_ref}/liberar-reserva",
-               {"orden_trabajo_id": "USER-OT"})
-    eventually("POST", f"/api/repuestos/existencia/{user_ref}/ajustar-existencia-por-conteo", {"conteo": 4})
+
+def comandos_de_usuario(pasos: list[str], sufijo: str) -> None:
+    usuario = f"USER-{sufijo}"
+    comando("registrar entrada de usuario", "/api/repuestos/existencia",
+            {"referencia": usuario, "cantidad": 4, "stock_minimo": 1, "plazo_dias": 3})
+    existencia_de(usuario, "existencia de usuario", lambda valor: valor.get("fisica") == 4)
+
+    comando("reservar repuesto", f"/api/repuestos/existencia/{usuario}/reservar-repuesto",
+            {"orden_trabajo_id": "OT-RESERVA", "cantidad": 1})
+    existencia = existencia_de(usuario, "reserva del usuario", lambda valor: reservada(valor) == 1)
+    require(disponible(existencia) == 3 and existencia["estado"] == "reservado",
+            f"reserva inesperada: {existencia}")
+    pasos.append("reservar repuesto -> reservada 1, disponible 3")
+
+    comando("liberar reserva", f"/api/repuestos/existencia/{usuario}/liberar-reserva",
+            {"orden_trabajo_id": "OT-RESERVA"})
+    existencia = existencia_de(usuario, "reserva liberada", lambda valor: not valor.get("reservas"))
+    require(disponible(existencia) == 4 and existencia["estado"] == "disponible",
+            f"liberación inesperada: {existencia}")
+    pasos.append("liberar reserva -> disponible 4")
+
+    comando("ajustar existencia por conteo", f"/api/repuestos/existencia/{usuario}/ajustar-existencia-por-conteo",
+            {"conteo": 3})
+    existencia = existencia_de(usuario, "existencia ajustada", lambda valor: valor.get("fisica") == 3)
+    require(disponible(existencia) == 3, f"ajuste inesperado: {existencia}")
+    pasos.append("ajustar existencia por conteo -> física 3")
+
+    consumo = f"CONS-{sufijo}"
+    comando("registrar entrada del repuesto consumido", "/api/repuestos/existencia",
+            {"referencia": consumo, "cantidad": 5, "stock_minimo": 0, "plazo_dias": 2})
+    existencia_de(consumo, "existencia a consumir", lambda valor: valor.get("fisica") == 5)
+    comando("reservar para la OT de consumo", f"/api/repuestos/existencia/{consumo}/reservar-repuesto",
+            {"orden_trabajo_id": "OT-CONSUMO", "cantidad": 2})
+    existencia_de(consumo, "reserva para consumo", lambda valor: reservada(valor) == 2)
+    comando("confirmar consumo", f"/api/repuestos/existencia/{consumo}/confirmar-consumo",
+            {"orden_trabajo_id": "OT-CONSUMO"})
+    existencia = existencia_de(consumo, "consumo confirmado",
+                               lambda valor: valor.get("fisica") == 3 and not valor.get("reservas"))
+    require(existencia["estado"] == "consumido", f"consumo inesperado: {existencia}")
+    pasos.append("confirmar consumo -> física 3, consumido")
+
     solicitud_id = str(uuid.uuid4())
-    eventually("POST", "/api/repuestos/solicitud-de-reposicion", {
-        "referencia": user_ref, "cantidad": 2, "monto": 100, "solicitud_id": solicitud_id,
-    })
-    eventually("POST", f"/api/repuestos/solicitud-de-reposicion/{solicitud_id}/aprobar-solicitud")
-    solicitud = eventually("GET", f"/api/repuestos/solicitud-de-reposicion/{solicitud_id}",
-                           check=lambda value: value.get("estado") == "aprobada")
-    require(solicitud["estado"] == "aprobada", "no se aprobó la solicitud")
-    cancel_id = str(uuid.uuid4())
-    eventually("POST", "/api/repuestos/solicitud-de-reposicion", {
-        "referencia": "CANCEL-REF", "cantidad": 1, "monto": 10, "solicitud_id": cancel_id,
-    })
-    eventually("POST", f"/api/repuestos/solicitud-de-reposicion/{cancel_id}/cancelar-solicitud")
-    steps.append("comandos principales de usuario")
+    comando("solicitar reposición", "/api/repuestos/solicitud-de-reposicion",
+            {"referencia": usuario, "cantidad": 2, "monto": 100, "solicitud_id": solicitud_id})
+    solicitud_de(solicitud_id, lambda valor: valor.get("estado") == "abierta")
+    comando("aprobar solicitud", f"/api/repuestos/solicitud-de-reposicion/{solicitud_id}/aprobar-solicitud")
+    solicitud_de(solicitud_id, lambda valor: valor.get("estado") == "aprobada")
+    pasos.append("solicitar reposición -> aprobada")
+
+    cancelar_id = str(uuid.uuid4())
+    comando("solicitar reposición a cancelar", "/api/repuestos/solicitud-de-reposicion",
+            {"referencia": f"CANCEL-{sufijo}", "cantidad": 1, "monto": 10, "solicitud_id": cancelar_id})
+    solicitud_de(cancelar_id, lambda valor: valor.get("estado") == "abierta")
+    comando("cancelar solicitud", f"/api/repuestos/solicitud-de-reposicion/{cancelar_id}/cancelar-solicitud")
+    solicitud_de(cancelar_id, lambda valor: valor.get("estado") == "cancelada")
+    pasos.append("solicitar reposición -> cancelada")
+
+
+def main() -> int:
+    pasos: list[str] = []
+    esperar("salud del servicio", "/api/repuestos/health", lambda valor: valor.get("status") == "ok")
+    pasos.append("salud del servicio")
+
+    sufijo = uuid.uuid4().hex[:8]
+    historial_de_eventos(pasos, sufijo)
+    comandos_de_usuario(pasos, sufijo)
 
     print("Smoke Repuestos del Taller: OK")
-    for step in steps:
-        print(f"- {step}")
+    for paso in pasos:
+        print(f"- {paso}")
     return 0
 
 
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except Exception as error:
+    except Fallo as error:
         print(f"Smoke Repuestos del Taller: FAIL: {error}", file=sys.stderr)
         raise SystemExit(1)

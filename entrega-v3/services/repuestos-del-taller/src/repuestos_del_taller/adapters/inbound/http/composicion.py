@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 
 from ....application.manejadores import (
     AprobarSolicitudManejador, AjustarExistenciaPorConteoManejador, CancelarSolicitudManejador,
@@ -25,12 +26,20 @@ from ....contracts.topicos import PlanDeMantenimientoTopicos, IntervencionesTopi
 from .endpoints import RepuestosDelTallerEndpoints
 
 
+_DIALECTO_SQLALCHEMY = re.compile(r"^postgresql\+[a-z0-9_]+://")
+
+
+def _dsn(database_url: str) -> str:
+    """``psycopg`` solo acepta ``postgresql://``; el compose publica el DSN con el dialecto de SQLAlchemy."""
+    return _DIALECTO_SQLALCHEMY.sub("postgresql://", database_url)
+
+
 def _repositorios(database_url: str):
     """PostgreSQL cuando ``DATABASE_URL`` está definida; memoria solo como alternativa explícita de test."""
     if not database_url:
         return RepositorioExistencia(), RepositorioSolicitudDeReposicion()
     import psycopg
-    conexion = psycopg.connect(database_url, autocommit=True)
+    conexion = psycopg.connect(_dsn(database_url), autocommit=True)
     return RepositorioExistenciaSql(conexion), RepositorioSolicitudDeReposicionSql(conexion)
 
 
