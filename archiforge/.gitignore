@@ -1,0 +1,9 @@
+.forge/
+.forge-dry/
+out/
+out_dryrun/
+__pycache__/
+.pytest_cache/
+node_modules/
+.venv/
+opencode.json
