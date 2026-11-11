@@ -352,7 +352,7 @@ def adr_gate(cfg: Config, manifest: dict, final: bool = True) -> Gate:
 
 def decisions_catalog(cfg: Config) -> dict:
     import tomllib
-    return tomllib.loads((cfg.root / "catalog" / "patrones.toml").read_text(encoding="utf-8"))
+    return tomllib.loads((cfg.tool_root / "catalog" / "patrones.toml").read_text(encoding="utf-8"))
 
 
 def _all_code(cfg: Config):

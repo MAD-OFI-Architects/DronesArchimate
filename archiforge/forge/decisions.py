@@ -62,7 +62,7 @@ def find(cfg: Config, name: str) -> Domain | None:
 
 def validate(cfg: Config, d: Domain) -> tuple[list[str], list[str]]:
     """(errores, avisos). Los errores impiden construir; los avisos informan sin imponer."""
-    cat, errors, warns = catalog(cfg.root), [], []
+    cat, errors, warns = catalog(cfg.tool_root), [], []
     if d.language not in LANGUAGES:
         errors.append(f"lenguaje «{d.language}» no soportado (usa: {', '.join(LANGUAGES)}).")
     if d.architecture not in ARCHITECTURES:

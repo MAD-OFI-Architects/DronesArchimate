@@ -38,7 +38,8 @@ def _ver(argv: list[str]) -> str:
         return ""
 
 
-def doctor(cfg: config.Config, domains: list[Domain] | None = None) -> bool:
+def tool_checks(cfg: config.Config, domains: list[Domain] | None = None) -> list[tuple[str, bool, str]]:
+    """Herramientas que necesita construir estos dominios: (nombre, ok, versión). Sin imprimir: lo usan `doctor` y la TUI."""
     langs = {d.language for d in (domains if domains is not None else cfg.domains)}
     need = [("git", ["git", "--version"]), ("python", [sys.executable, "--version"]), ("node", ["node", "--version"]),
             ("npm", ["npm", "--version"]), ("docker", ["docker", "--version"]), ("docker compose", ["docker", "compose", "version"])]
@@ -49,8 +50,7 @@ def doctor(cfg: config.Config, domains: list[Domain] | None = None) -> bool:
     eng = cfg.agent.engine
     if eng in ("claude", "opencode"):
         need.append((f"agente {eng}", [eng, "--version"]))
-    ok = True
-    print(f"{'herramienta':22} estado")
+    out = []
     for name, argv in need:
         v = _ver(argv)
         good = bool(v)
@@ -63,11 +63,21 @@ def doctor(cfg: config.Config, domains: list[Domain] | None = None) -> bool:
         if good and name.startswith("java"):
             m = re.search(r'"?(\d+)', v)
             good = bool(m) and int(m.group(1)) >= 17
-        print(f"{'✅' if good else '❌'} {name:20} {v or 'NO ENCONTRADO'}")
-        ok &= good
+        out.append((name, good, v))
     if not (cfg.archimate.exists() and cfg.guide.exists()):
-        print("❌ faltan insumos (archimate o guía de referencia)")
-        ok = False
+        out.append(("insumos (archimate y guía de referencia)", False, "faltan"))
+    return out
+
+
+def doctor(cfg: config.Config, domains: list[Domain] | None = None) -> bool:
+    print(f"{'herramienta':22} estado")
+    ok = True
+    for name, good, v in tool_checks(cfg, domains):
+        if name.startswith("insumos"):
+            print("❌ faltan insumos (archimate o guía de referencia)")
+        else:
+            print(f"{'✅' if good else '❌'} {name:20} {v or 'NO ENCONTRADO'}")
+        ok &= good
     return ok
 
 
@@ -160,8 +170,11 @@ def _reopen(run: Runner) -> None:
     run.save()
 
 
-def build_one(cfg: config.Config, d: Domain, a) -> int:
-    run = Runner(cfg, d, a.skip_permissions)
+def build_one(cfg: config.Config, d: Domain, a, sink=None, agent_env: dict | None = None, cancel=None) -> int:
+    """`sink(línea)` recibe el log en vez de imprimirlo; `agent_env` son variables para el agente (tokens); `cancel` es un
+    threading.Event: al activarse, el dominio se detiene al terminar la etapa en curso. Los tres son para la TUI."""
+    run = Runner(cfg, d, a.skip_permissions, agent_env=agent_env)
+    run.sink, run.cancel = sink, cancel
     for lap in range(1, a.laps + 1):
         if lap > 1:
             _reopen(run)
@@ -172,7 +185,10 @@ def build_one(cfg: config.Config, d: Domain, a) -> int:
         if a.only or lap == a.laps:
             break
         run.log(f"Quedaron etapas sin pasar; reintento en {a.wait}s (límites de cuota, red, etc.)…")
-        time.sleep(a.wait)
+        if cancel is not None and cancel.wait(a.wait):
+            break
+        elif cancel is None:
+            time.sleep(a.wait)
     return 1
 
 
@@ -311,7 +327,7 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_domains(cfg)
     if a.cmd == "advise":
         ctx = _context(cfg, a.name)
-        ir, cat = build_ir(cfg.archimate, cfg.docs_dir), decisions.catalog(cfg.root)
+        ir, cat = build_ir(cfg.archimate, cfg.docs_dir), decisions.catalog(cfg.tool_root)
         print(json.dumps({"facts": advisor.facts(ir, ctx), "patrones": advisor.advise(ir, ctx, cat)}, ensure_ascii=False, indent=2)
               if a.json else advisor.render(ir, ctx, cat))
         return 0

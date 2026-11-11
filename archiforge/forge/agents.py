@@ -7,6 +7,7 @@ Windows, macOS y Linux (sin límites de longitud ni comillas).
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import time
@@ -74,7 +75,9 @@ def write_opencode_config(root: Path) -> None:
 
 
 def run_agent(cfg: AgentCfg, work_file: Path, root: Path, log_file: Path, skip_permissions: bool = False,
-              agent: str | None = None) -> tuple[bool, str]:
+              agent: str | None = None, env: dict[str, str] | None = None) -> tuple[bool, str]:
+    """`env`: variables extra para el proceso del agente (p. ej. los tokens de API). Solo viajan por entorno: no entran
+    en `argv`, ni en la cabecera del log."""
     argv, stdin = build_argv(cfg, work_file, root, skip_permissions, agent)
     exe = shutil.which(argv[0])
     if not exe:
@@ -89,7 +92,8 @@ def run_agent(cfg: AgentCfg, work_file: Path, root: Path, log_file: Path, skip_p
             fh.write(f"$ {' '.join(argv[:3])} …\n\n")
             fh.flush()
             proc = subprocess.run(argv, cwd=root, input=stdin, stdin=None if stdin else subprocess.DEVNULL, stdout=fh,
-                                  stderr=subprocess.STDOUT, text=True, timeout=cfg.timeout_minutes * 60)
+                                  stderr=subprocess.STDOUT, text=True, timeout=cfg.timeout_minutes * 60,
+                                  env={**os.environ, **(env or {})})
         return proc.returncode == 0, f"código de salida {proc.returncode} en {time.time() - t0:.0f}s"
     except subprocess.TimeoutExpired:
         return False, f"agotó el tiempo ({cfg.timeout_minutes} min)"

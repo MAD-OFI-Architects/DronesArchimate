@@ -17,6 +17,7 @@ _COMMON = {"domain": ["/domain/", ".domain/"], "application": ["/application/", 
            "tests": ["/tests/", ".tests/", "tests/", "/src/test/"]}
 LAYERS_BY_LANG = {"csharp": _COMMON, "python": _COMMON, "java": _COMMON}
 LANGUAGES = ("csharp", "python", "java")
+TOOL_ROOT = Path(__file__).resolve().parent.parent      # donde viven catalog/, prompts/, reference/ y config/ (la herramienta)
 
 
 @dataclass
@@ -58,9 +59,9 @@ class AgentCfg:
 
 @dataclass
 class Config:
-    root: Path
+    root: Path                        # raíz del PROYECTO: forge.toml, decisiones/, .forge/ y out/
     archimate: Path
-    docs_dir: Path
+    docs_dir: Path | None             # documentos de fase (opcional: sin ellos el contexto de cada agregado puede faltar)
     guide: Path
     out: Path
     domains: list[Domain]
@@ -71,10 +72,17 @@ class Config:
     repo: str = ""                    # URL del repositorio del producto (se clona en out/ si no existe)
     decisions_dir: Path = Path("decisiones")
     raw: dict = field(default_factory=dict)
+    tool_root: Path = TOOL_ROOT       # raíz de la HERRAMIENTA; distinta de `root` cuando el proyecto vive aparte (TUI)
 
     def for_domain(self, d: Domain) -> "Config":
         """Vista de la configuración para construir UN dominio: estado propio y solo ese dominio."""
         return dataclasses.replace(self, domains=[d], state_dir=f"{self.state_dir}/{d.slug}")
+
+
+def _resolve(root: Path, rel: str) -> Path:
+    """Recurso de referencia: el del proyecto si existe; si no, el de la herramienta."""
+    own = root / rel
+    return own if own.exists() else TOOL_ROOT / rel
 
 
 def load(path: Path) -> Config:
@@ -87,8 +95,8 @@ def load(path: Path) -> Config:
     cfg = Config(
         root=root,
         archimate=root / inp["archimate"],
-        docs_dir=root / inp["docs_dir"],
-        guide=root / inp.get("reference_guide", "reference/guia_ddd.md"),
+        docs_dir=(root / inp["docs_dir"]) if inp.get("docs_dir") else None,
+        guide=_resolve(root, inp.get("reference_guide", "reference/guia_ddd.md")),
         out=root / out.get("dir", "out"),
         domains=[],
         agent=AgentCfg(**ag),

@@ -44,17 +44,20 @@ def now() -> str:
 
 
 class Runner:
-    def __init__(self, cfg: Config, domain: Domain, skip_permissions: bool = False):
+    def __init__(self, cfg: Config, domain: Domain, skip_permissions: bool = False, agent_env: dict[str, str] | None = None):
         cfg = cfg.for_domain(domain)          # estado propio en .forge/<dominio>/ y solo ese dominio
         self.cfg = cfg
         self.domain = domain
         self.skip_permissions = skip_permissions
+        self.sink = None            # callable(str) opcional: recibe cada línea de log (la TUI) en vez de imprimirla
+        self.cancel = None          # threading.Event opcional: detiene el pipeline al terminar la etapa en curso
+        self.agent_env = dict(agent_env or {})      # tokens de API: solo se pasan por entorno al agente
         self.fdir = cfg.root / cfg.state_dir
         for sub in ("work", "logs"):
             (self.fdir / sub).mkdir(parents=True, exist_ok=True)
         self.state_file = self.fdir / "state.json"
         self.state = json.loads(self.state_file.read_text(encoding="utf-8")) if self.state_file.exists() else {}
-        self.env = jinja2.Environment(loader=jinja2.FileSystemLoader(cfg.root / "prompts"), keep_trailing_newline=True,
+        self.env = jinja2.Environment(loader=jinja2.FileSystemLoader(cfg.tool_root / "prompts"), keep_trailing_newline=True,
                                       undefined=jinja2.StrictUndefined, trim_blocks=True, lstrip_blocks=True)
         self.stages = build_stages(cfg)
         self._ir = self._manifest = None
@@ -62,7 +65,10 @@ class Runner:
     # ---------------------------------------------------------------- utilidades
     def log(self, msg: str) -> None:
         line = f"[{now()}] {msg}"
-        print(line, flush=True)
+        if self.sink:
+            self.sink(line)
+        else:
+            print(line, flush=True)
         with (self.fdir / "run.log").open("a", encoding="utf-8") as fh:
             fh.write(line + "\n")
 
@@ -153,7 +159,7 @@ class Runner:
         remotes = [{**r, "commands": [{**c, "form": pascal(c["command"]) + "Form"} for c in r["commands"]]} for r in m["frontend"]["remotes"]]
         layers = stage.params.get("layers", set())
         ctx = {"stage": stage, "scope": stage.scope, "feedback": feedback, "gates_text": stage.gates_text, "cfg": cfg, "d": d, "info": info,
-               "ctx": ctxs[d.context], "cat": decisions.catalog(cfg.root), "state_dir": cfg.state_dir, "layer": stage.params.get("layer", ""),
+               "ctx": ctxs[d.context], "cat": decisions.catalog(cfg.tool_root), "state_dir": cfg.state_dir, "layer": stage.params.get("layer", ""),
                "items": [i for i in m["items"] if i["domain"] == d.context and i["layer"] in layers],
                "remote": remotes[0] if remotes else None, "remote_slug": f"mfe-{d.slug}", "short": kebab(d.context).split("-")[0]}
         text = self.env.get_template(stage.template).render(**ctx)
@@ -170,7 +176,7 @@ class Runner:
         agent = agent_for(stage.id, self.domain.language) if self.cfg.agent.engine == "opencode" else None
         who = agent or self.cfg.agent.engine
         self.log(f"  intento {n}: agente «{who}» trabajando (log: {log.relative_to(self.cfg.root)})")
-        ok, info = agents.run_agent(self.cfg.agent, work, self.cfg.root, log, self.skip_permissions, agent=agent)
+        ok, info = agents.run_agent(self.cfg.agent, work, self.cfg.root, log, self.skip_permissions, agent=agent, env=self.agent_env)
         self.log(f"  agente terminó: {info}")
         gates = stage.gates(self.cfg, self.manifest) if stage.gates else []
         return gates if (ok or gates) else [G.Gate(False, "agente", info)]
@@ -241,6 +247,9 @@ class Runner:
         self.log(f"=== ArchiForge · {len(todo)} etapas · agente: {self.cfg.agent.engine} ===")
         failed: set[str] = {k for k, v in self.state.items() if v.get("status") in ("failed", "skipped") and not force}
         for stage in todo:
+            if self.cancel is not None and self.cancel.is_set():
+                self.log(f"Construcción cancelada por el usuario: se detiene antes de «{stage.id}» (lo ya hecho queda guardado).")
+                return False
             st = self.state.get(stage.id, {})
             if st.get("status") == "passed" and not force:
                 self.log(f"[{stage.id}] ya completada (se omite; usa --force para repetir)")

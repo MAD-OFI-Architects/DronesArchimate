@@ -333,3 +333,24 @@ def test_ensure_design_system_migrates_legacy_css_and_keeps_extended_css(tmp_pat
     (tmp_path / "frontend/mfe-x/src/styles.css").write_text(migrated + ".extra{color:var(--mfe-text)}\n", encoding="utf-8")
     assert scaffold.ensure_design_system(cfg, "x") is False                       # ya usa tokens: no pisa la ampliación
     assert ".extra" in (tmp_path / "frontend/mfe-x/src/styles.css").read_text(encoding="utf-8")
+
+
+def test_runner_sink_and_cancel_support_the_tui(tmp_path):
+    import threading
+    cfg = dataclasses.replace(config.load(ROOT / "forge.toml"), root=tmp_path, out=tmp_path / "out")
+    run = __import__("forge.runner", fromlist=["Runner"]).Runner(cfg, dom("Intervenciones", "csharp", "clean-ddd", "microservicio", "mongodb"))
+    lines = []
+    run.sink = lines.append
+    run.log("hola")
+    assert lines and lines[0].endswith("hola") and "hola" in (run.fdir / "run.log").read_text(encoding="utf-8")   # sink y archivo
+    run.cancel = threading.Event()
+    run.cancel.set()
+    assert run.run() is False and any("cancelada" in l for l in lines)
+
+
+def test_tool_checks_lists_what_doctor_prints():
+    from forge import cli
+    cfg = config.load(ROOT / "forge.toml")
+    names = [n for n, _, _ in cli.tool_checks(cfg, [dom(lang="csharp")])]
+    assert "git" in names and "docker compose" in names and any(n.startswith("dotnet") for n in names)
+    assert not any(n.startswith("java") for n in names)

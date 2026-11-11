@@ -27,7 +27,7 @@ def bus_topics(ir: dict, cfg: Config, manifest: dict) -> dict:
     ctx = {c["name"]: c for c in ir["contexts"]}
     api_events = {e for r in ir["context_relations"] if r["mechanism"].startswith("API") for e in r["events"]}
     real = {d.context: d for d in cfg.domains}
-    table = eventcontracts.load(cfg.root)
+    table = eventcontracts.load(cfg.tool_root)
     topics = []
     for c in ir["contexts"]:
         for ev in c["published_events"]:
