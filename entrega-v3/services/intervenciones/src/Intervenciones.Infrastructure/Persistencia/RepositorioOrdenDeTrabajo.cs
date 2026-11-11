@@ -27,8 +27,11 @@ public sealed class RepositorioOrdenDeTrabajo(
     public Task<OrdenDeTrabajo?> ObtenerAsync(Guid id, CancellationToken cancellationToken = default) =>
         ObtenerPorIdAsync(id, cancellationToken);
 
+    /// <summary>Busca primero por la identidad determinista de la parada (lectura directa); solo si no está recorre
+    /// la colección, para las órdenes abiertas antes de que la identidad se derivara de la parada.</summary>
     public async Task<OrdenDeTrabajo?> ObtenerPorParadaAsync(Guid paradaId, CancellationToken cancellationToken = default) =>
-        (await BuscarAsync(m => m.ParadaId == paradaId, cancellationToken)).SingleOrDefault();
+        await ObtenerPorIdAsync(IdentidadDeOrden.DeParada(paradaId), cancellationToken)
+        ?? (await BuscarAsync(m => m.ParadaId == paradaId, cancellationToken)).FirstOrDefault();
 
     public async Task GuardarAsync(OrdenDeTrabajo orden, CancellationToken cancellationToken = default)
     {

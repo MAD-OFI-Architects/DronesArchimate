@@ -1,3 +1,6 @@
+using BuildingBlocks.Application.Cqrs;
+using BuildingBlocks.Application.Persistencia;
+using Microsoft.Extensions.DependencyInjection;
 using BuildingBlocks.Application.Excepciones;
 using BuildingBlocks.Domain;
 using Intervenciones.Application.Comandos;
@@ -46,6 +49,30 @@ public class ComandosTests
         Assert.Equal(primera, segunda);
         Assert.Single(await e.OrdenesAsync());
     }
+
+    [Fact]
+    public async Task Dos_aperturas_simultaneas_de_la_misma_parada_no_duplican_la_orden()
+    {
+        await using var e = new EscenarioDeIntervenciones();
+        var comando = new AbrirOrdenDeTrabajoComando(EscenarioDeIntervenciones.Parada, true, "ADV-03", "Preventiva", false);
+        await using var a = e.Proveedor.CreateAsyncScope();
+        await using var b = e.Proveedor.CreateAsyncScope();
+
+        // Ambas leen "no existe" antes de que cualquiera confirme: es el entrelazado que duplicaba órdenes.
+        var idA = await a.ServiceProvider.GetRequiredService<IManejadorDeSolicitud<AbrirOrdenDeTrabajoComando, Guid>>().ManejarAsync(comando, default);
+        var idB = await b.ServiceProvider.GetRequiredService<IManejadorDeSolicitud<AbrirOrdenDeTrabajoComando, Guid>>().ManejarAsync(comando, default);
+        await a.ServiceProvider.GetRequiredService<IUnidadDeTrabajo>().ConfirmarAsync();
+
+        Assert.Equal(idA, idB);
+        await Assert.ThrowsAsync<ConflictoDeConcurrenciaException>(() => b.ServiceProvider.GetRequiredService<IUnidadDeTrabajo>().ConfirmarAsync());
+        Assert.Single(await e.OrdenesAsync());
+        Assert.Equal(idA, await e.AbrirAsync());                                   // el reintento del perdedor devuelve la existente
+    }
+
+    [Fact]
+    public void La_identidad_de_la_orden_es_estable_y_distinta_por_parada() =>
+        Assert.True(IdentidadDeOrden.DeParada(EscenarioDeIntervenciones.Parada) == IdentidadDeOrden.DeParada(EscenarioDeIntervenciones.Parada)
+            && IdentidadDeOrden.DeParada(EscenarioDeIntervenciones.Parada) != IdentidadDeOrden.DeParada(Guid.NewGuid()));
 
     [Fact]
     public async Task Abrir_sin_parada_programada_rompe_ParadaInexistente()

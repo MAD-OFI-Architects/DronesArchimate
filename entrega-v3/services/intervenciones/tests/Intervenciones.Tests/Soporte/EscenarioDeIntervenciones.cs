@@ -85,7 +85,8 @@ public sealed class RepositorioDeOrdenesEnMemoria(
         ObtenerPorIdAsync(id, cancellationToken);
 
     public async Task<OrdenDeTrabajo?> ObtenerPorParadaAsync(Guid paradaId, CancellationToken cancellationToken = default) =>
-        (await BuscarAsync(m => m.ParadaId == paradaId, cancellationToken)).SingleOrDefault();
+        await ObtenerPorIdAsync(IdentidadDeOrden.DeParada(paradaId), cancellationToken)
+        ?? (await BuscarAsync(m => m.ParadaId == paradaId, cancellationToken)).FirstOrDefault();
 
     public async Task GuardarAsync(OrdenDeTrabajo orden, CancellationToken cancellationToken = default)
     {

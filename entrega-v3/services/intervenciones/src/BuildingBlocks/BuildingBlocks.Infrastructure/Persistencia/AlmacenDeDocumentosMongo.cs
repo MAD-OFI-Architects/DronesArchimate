@@ -49,7 +49,7 @@ public sealed class AlmacenDeDocumentosMongo(IMongoClient cliente, IMongoDatabas
 
             await sesion.CommitTransactionAsync(cancellationToken);
         }
-        catch (Exception ex) when (EsClaveDuplicada(ex))
+        catch (Exception ex) when (EsConflictoDeEscritura(ex))
         {
             await sesion.AbortTransactionAsync(CancellationToken.None);
             throw new ConflictoDeConcurrenciaException("El documento o el mensaje ya fue escrito por otra operación.");
@@ -147,10 +147,13 @@ public sealed class AlmacenDeDocumentosMongo(IMongoClient cliente, IMongoDatabas
         UltimoError = b.GetValue("ultimoError", BsonNull.Value).IsBsonNull ? null : b["ultimoError"].AsString
     };
 
-    private static bool EsClaveDuplicada(Exception ex) => ex switch
+    /// <summary>Dos transacciones que escriben el mismo documento chocan como clave duplicada (si una ya confirmó)
+    /// o como conflicto de escritura transitorio (si siguen abiertas): en ambos casos otra operación ganó.</summary>
+    private static bool EsConflictoDeEscritura(Exception ex) => ex switch
     {
         MongoWriteException e => e.WriteError.Category == ServerErrorCategory.DuplicateKey,
         MongoBulkWriteException e => e.WriteErrors.Any(w => w.Category == ServerErrorCategory.DuplicateKey),
+        MongoException e => e.HasErrorLabel("TransientTransactionError"),
         _ => false
     };
 }

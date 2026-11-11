@@ -14,7 +14,7 @@ public sealed class AbrirOrdenDeTrabajoManejador(IOrdenDeTrabajoRepository orden
             return existente.Id;
 
         var orden = OrdenDeTrabajo.Abrir(
-            Guid.NewGuid(), comando.ParadaId, comando.ParadaProgramada, comando.DronId,
+            IdentidadDeOrden.DeParada(comando.ParadaId), comando.ParadaId, comando.ParadaProgramada, comando.DronId,
             Enum.Parse<TipoDeOrden>(comando.Tipo, ignoreCase: true), comando.EsTrabajoMayor, reloj.Now);
 
         await ordenes.GuardarAsync(orden, cancellationToken);
