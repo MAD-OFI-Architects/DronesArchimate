@@ -4,6 +4,19 @@ Las tomó el equipo para **{{ d.context }}**; son la fuente de verdad. No las ca
 - **Lenguaje**: {{ d.language }} · **Arquitectura interna**: {{ d.architecture }} · **Estilo de servicio**: {{ d.style }} · **Base de datos**: {{ d.database }} · **Puerto**: {{ d.port }}
 {% for pid, p in d.patterns.items() if p.get('usar') %}- **Patrón elegido** `{{ pid }}` — {{ cat[pid].nombre }}{% if d.rationale.get(pid) %}: {{ d.rationale[pid] }}{% endif %}{% for k, v in p.items() if k != 'usar' %} ({{ k }}: {{ v }}){% endfor %}
 
+{% if cat[pid].get('roles') %}
+  - **Estructura canónica**: {{ cat[pid].roles | join('; ') }}.{% if cat[pid].get('principios') %} Principios que protege: {{ cat[pid].principios | join(', ') }}.{% endif %}
+
+{% if p.get('aplicar_en') %}
+  - **Dónde se aplica** (decisión del arquitecto): {{ p.aplicar_en }}. Aplícalo SOLO ahí; no lo extiendas al resto del servicio.
+{% endif %}
+{% if cat[pid].get('min_clases') %}
+  - En el ADR, la fila de este patrón cita al menos {{ cat[pid].min_clases }} clases reales que cumplan esos roles; el verificador comprueba que la estructura exista y que lo definido se use.
+{% endif %}
+{% if cat[pid].get('fuente') %}
+  - Referencia: {{ cat[pid].fuente }}
+{% endif %}
+{% endif %}
 {% endfor %}
 - **Patrones descartados o no elegidos** (NO los implementes ni generes clases para ellos): {% for pid in cat %}{% if not d.uses(pid) %}`{{ pid }}` {% endif %}{% endfor %}
 

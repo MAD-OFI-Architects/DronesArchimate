@@ -1,0 +1,72 @@
+# Patrones creacionales (GoF). Referencia informativa: describen el patrón; no recomiendan ni preseleccionan nada.
+# requiere_donde = true: el arquitecto indica en `aplicar_en` sobre qué parte del servicio se aplica.
+
+[factory-method]
+nombre = "Factory Method"
+categoria = "creacional"
+que_es = "Una clase creadora declara un método fábrica que devuelve un producto por su abstracción; las subclases deciden qué producto concreto se instancia."
+cuando_si = "El código cliente no debe conocer la clase concreta que crea, o cada variante de un flujo necesita su propio producto."
+cuando_no = "Hay un solo producto concreto y no se espera otro: un constructor directo es más simple."
+costo = "Medio: una jerarquía paralela de creadores y productos."
+roles = ["Product (interfaz)", "ConcreteProduct (≥2)", "Creator (método fábrica)", "ConcreteCreator"]
+principios = ["OCP", "DIP"]
+chequeo = ["abstraccion_con_implementaciones:2"]
+min_clases = 3
+requiere_donde = true
+fuente = "https://refactoring.guru/es/design-patterns/factory-method"
+
+[abstract-factory]
+nombre = "Abstract Factory"
+categoria = "creacional"
+que_es = "Una interfaz crea familias de objetos relacionados sin nombrar sus clases concretas; cada fábrica concreta produce una familia coherente."
+cuando_si = "Varios productos deben usarse siempre juntos y de la misma familia (por ejemplo, por proveedor, plataforma o tema)."
+cuando_no = "Los productos no forman familias o solo existe una familia."
+costo = "Alto: crece con cada producto nuevo en todas las fábricas."
+roles = ["AbstractFactory (interfaz)", "ConcreteFactory (≥2)", "AbstractProduct", "ConcreteProduct"]
+principios = ["OCP", "DIP"]
+chequeo = ["abstraccion_con_implementaciones:2"]
+min_clases = 4
+requiere_donde = true
+fuente = "https://refactoring.guru/es/design-patterns/abstract-factory"
+
+[builder]
+nombre = "Builder"
+categoria = "creacional"
+que_es = "Separa la construcción paso a paso de un objeto complejo de su representación, con un constructor fluido que termina en un método de construcción."
+cuando_si = "El objeto tiene muchos parámetros opcionales, pasos de armado o variantes de representación."
+cuando_no = "El objeto se crea con dos o tres argumentos obligatorios."
+costo = "Bajo-medio: una clase constructora por producto."
+roles = ["Builder (métodos encadenados)", "Product", "Director (opcional)"]
+principios = ["SRP"]
+chequeo = ["constructor_fluido"]
+min_clases = 2
+requiere_donde = true
+fuente = "https://refactoring.guru/es/design-patterns/builder"
+
+[prototype]
+nombre = "Prototype"
+categoria = "creacional"
+que_es = "Crea objetos nuevos copiando una instancia existente mediante un método de clonación, sin depender de su clase concreta."
+cuando_si = "Crear el objeto desde cero es costoso o hay configuraciones base que se duplican y ajustan."
+cuando_no = "Los objetos son simples o inmutables: copiar no aporta nada."
+costo = "Bajo, salvo grafos con referencias circulares donde la copia profunda se complica."
+roles = ["Prototype (método de clonación)", "ConcretePrototype"]
+principios = ["OCP"]
+chequeo = ["clonacion"]
+min_clases = 1
+requiere_donde = true
+fuente = "https://refactoring.guru/es/design-patterns/prototype"
+
+[singleton]
+nombre = "Singleton"
+categoria = "creacional"
+que_es = "Garantiza una única instancia de una clase y un punto de acceso global a ella."
+cuando_si = "Exactamente una instancia debe coordinar un recurso compartido y su ciclo de vida es el del proceso."
+cuando_no = "Se puede obtener lo mismo con inyección de dependencias y un registro con vida de un solo objeto; el acceso global dificulta las pruebas."
+costo = "Bajo en código; alto en acoplamiento y en pruebas si se abusa."
+roles = ["Singleton (constructor privado y acceso estático)"]
+principios = ["SRP"]
+chequeo = ["instancia_unica"]
+min_clases = 1
+requiere_donde = true
+fuente = "https://refactoring.guru/es/design-patterns/singleton"

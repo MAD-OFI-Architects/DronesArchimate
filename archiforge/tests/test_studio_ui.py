@@ -337,3 +337,29 @@ def test_assemble_failure_for_unjustified_decisions_tells_where_to_fix_it(env):
             s.done(1)
             assert "justificar cada decisión" in banner_text(s)
     run(go())
+
+
+def test_a_chosen_pattern_asks_where_it_applies_and_saves_it(env):
+    store, creds, info = env
+
+    async def go():
+        app = StudioApp(store, creds)
+        async with app.run_test(size=SIZE) as pilot:
+            await wait_for(pilot, lambda: type(app.screen).__name__ == "HomeScreen")
+            await _open_decision(app, pilot, "Intervenciones")
+            s = app.screen
+            where = s.query_one("#where-strategy", Input)
+            assert not where.display and not s.query_one("#where-title").display                # nada elegido: no se pregunta nada
+            _choose(s, "csharp", "clean-ddd", "microservicio", "mongodb", patterns=("strategy",))
+            await pilot.pause(0.4)
+            assert where.display and s.query_one("#where-title").display                         # elegido: pide dónde se aplica
+            assert not s.query_one("#where-decorator", Input).display
+            await pilot.press("ctrl+s")
+            await pilot.pause(0.3)
+            assert "aplicar_en" in banner_text(s) and not (info.root / "decisiones/intervenciones.toml").exists()
+            where.value = "el cálculo de horas-hombre de una orden"
+            await pilot.press("ctrl+s")
+            await wait_for(pilot, lambda: type(app.screen).__name__ == "DomainsScreen")
+        saved = (info.root / "decisiones/intervenciones.toml").read_text(encoding="utf-8")
+        assert 'strategy = { usar = true, aplicar_en = "el cálculo de horas-hombre de una orden" }' in saved
+    run(go())

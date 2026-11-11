@@ -21,6 +21,7 @@ from ..credentials import CredentialStore
 from ..stages import build_stages
 
 Sink = Callable[[str], None]
+CATEGORY_ORDER = ("creacional", "estructural", "comportamiento", "dominio", "aplicación", "persistencia", "integración", "resiliencia", "infraestructura")
 
 
 class StudioError(ValueError):
@@ -128,7 +129,9 @@ class Studio:
 
     def reference(self) -> list[dict]:
         """Fichas informativas de los patrones del catálogo (en el orden del catálogo). Solo describen: no recomiendan ni preseleccionan."""
-        return [{"id": pid, **spec} for pid, spec in self.catalog().items()]
+        items = [{"id": pid, **spec} for pid, spec in self.catalog().items()]
+        rank = {c: i for i, c in enumerate(CATEGORY_ORDER)}
+        return sorted(items, key=lambda a: rank.get(a.get("categoria", ""), len(rank)))      # estable: dentro de cada categoría, el orden del catálogo
 
     def facts(self, context: str) -> dict:
         return contextinfo.facts(self.ir, context)

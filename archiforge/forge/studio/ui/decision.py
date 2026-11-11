@@ -55,6 +55,12 @@ class DecisionScreen(Screen[bool]):
                 yield Input(str(d.port), id="port", type="integer")
                 yield Label("Patrones  (espacio marca/desmarca)", classes="field-label")
                 yield SelectionList(*[Selection(self._label(a), a["id"], bool(d.patterns.get(a["id"], {}).get("usar"))) for a in self.ref], id="patterns")
+                yield Label("Dónde se aplica cada patrón elegido", classes="field-label", id="where-title")
+                with Vertical(id="where"):
+                    for a in self.ref:
+                        if a.get("requiere_donde"):
+                            yield Input(value=str(d.patterns.get(a["id"], {}).get("aplicar_en", "")), id=f"where-{a['id']}",
+                                        placeholder="p. ej. el repositorio de lectura de órdenes")
                 for key, q in WHY:
                     yield Label(q, classes="field-label")
                     cur = d.rationale.get(key, "")
@@ -70,6 +76,24 @@ class DecisionScreen(Screen[bool]):
                 yield Static(self._advice_text(), id="advice")
         yield Footer()
 
+    def on_mount(self) -> None:
+        for a in self.ref:
+            if a.get("requiere_donde"):
+                self.query_one(f"#where-{a['id']}", Input).border_title = a["nombre"]
+        self._sync_where()
+
+    @on(SelectionList.SelectedChanged, "#patterns")
+    def _sync_where(self) -> None:
+        """Un patrón elegido que actúa sobre código arbitrario pregunta dónde se aplica; los no elegidos no muestran nada."""
+        chosen = set(self.query_one("#patterns", SelectionList).selected)
+        shown = False
+        for a in self.ref:
+            if a.get("requiere_donde"):
+                on_ = a["id"] in chosen
+                self.query_one(f"#where-{a['id']}", Input).display = on_
+                shown = shown or on_
+        self.query_one("#where-title").display = shown
+
     @staticmethod
     def _label(a: dict) -> Text:
         t = Text(a["nombre"], style="bold")
@@ -84,7 +108,11 @@ class DecisionScreen(Screen[bool]):
         t.append(f"{f['purpose']}\n\n", style="italic")
         t.append(f"{len(f['aggregates'])} agregados · {len(f['commands'])} comandos · {len(f['rules'])} reglas de negocio · {len(f['queries'])} consultas\n", style="dim")
         t.append(f"Publica: {', '.join(f['published']) or '—'}\nConsume: {', '.join(f['consumed']) or '—'}\n\n", style="dim")
+        last = None
         for a in self.ref:
+            if a.get("categoria") != last:                       # los patrones se agrupan por categoría
+                last = a.get("categoria")
+                t.append(f"── {str(last).upper()} ──\n\n", style="bold #7aa2f7")
             t.append(f"{a['nombre']}", style="bold")
             t.append(f" · {a.get('categoria', '')}\n", style="dim")
             t.append(f"  {a['que_es']}\n")
@@ -102,7 +130,15 @@ class DecisionScreen(Screen[bool]):
         except ValueError:
             raise ValueError("El puerto debe ser un número.") from None
         chosen = set(self.query_one("#patterns", SelectionList).selected)
-        patterns = {a["id"]: {**self.draft.patterns.get(a["id"], {}), "usar": a["id"] in chosen} for a in self.ref}
+        patterns = {}
+        for a in self.ref:
+            entry = {k: v for k, v in self.draft.patterns.get(a["id"], {}).items() if k != "aplicar_en"}
+            entry["usar"] = a["id"] in chosen
+            if a.get("requiere_donde") and entry["usar"]:
+                where = self.query_one(f"#where-{a['id']}", Input).value.strip()
+                if where:
+                    entry["aplicar_en"] = where
+            patterns[a["id"]] = entry
         why = {k: self.query_one(f"#why-{k}", TextArea).text.strip() for k, _ in WHY}
         keep = {k: v for k, v in self.draft.rationale.items() if k not in why}     # justificaciones de patrones, etc.
         rationale = {**keep, **{k: v for k, v in why.items() if v}}              # un campo vacío elimina el borrador

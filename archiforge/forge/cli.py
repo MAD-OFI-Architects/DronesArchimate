@@ -230,19 +230,30 @@ def cmd_build(cfg: config.Config, a, argv0: list[str]) -> int:
     return 0 if not any(codes) else 1
 
 
-def cmd_patterns(cfg: config.Config, pid: str | None) -> int:
+def cmd_patterns(cfg: config.Config, pid: str | None, categoria: str | None = None) -> int:
     cat = decisions.catalog(cfg.tool_root)
     if pid:
         if pid not in cat:
             raise SystemExit(f"Patrón «{pid}» desconocido. Disponibles: {', '.join(cat)}.")
         p = cat[pid]
         print(f"{p['nombre']}  ({pid} · {p.get('categoria', '')})\n\nQué es:     {p['que_es']}\nSe usa cuando:     {p['cuando_si']}\nNo se usa cuando:  {p['cuando_no']}\nCosto:      {p['costo']}")
+        if p.get("roles"):
+            print(f"Estructura: {'; '.join(p['roles'])}")
+        if p.get("principios"):
+            print(f"Principios: {', '.join(p['principios'])}")
         if p.get("requiere"):
             print(f"Requiere:   {', '.join(p['requiere'])}")
+        if p.get("requiere_donde"):
+            print("Al elegirlo indicas dónde se aplica (campo aplicar_en).")
+        if p.get("fuente"):
+            print(f"Referencia: {p['fuente']}")
         return 0
-    print(f"{'id':16} {'categoría':13} patrón")
-    for k, p in cat.items():
-        print(f"{k:16} {p.get('categoria', ''):13} {p['nombre']}")
+    shown = {k: p for k, p in cat.items() if not categoria or p.get("categoria") == categoria}
+    if not shown:
+        raise SystemExit(f"No hay patrones en la categoría «{categoria}». Categorías: {', '.join(dict.fromkeys(p.get('categoria', '') for p in cat.values()))}.")
+    print(f"{'id':24} {'categoría':15} patrón")
+    for k, p in shown.items():
+        print(f"{k:24} {p.get('categoria', ''):15} {p['nombre']}")
     return 0
 
 
@@ -303,6 +314,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("domains", help="contextos del ArchiMate, cuáles están decididos y cómo va cada uno")
     pt = sub.add_parser("patterns", help="catálogo de patrones disponibles; con un id muestra su ficha")
     pt.add_argument("id", nargs="?")
+    pt.add_argument("--categoria", help="filtra por categoría (creacional, estructural, comportamiento, dominio, aplicación, integración, persistencia, resiliencia, infraestructura)")
     de = sub.add_parser("decide", help="registra las decisiones del arquitecto para un dominio (decisiones/<dominio>.toml)")
     de.add_argument("name")
     de.add_argument("--lang", choices=list(config.LANGUAGES)); de.add_argument("--arch", choices=list(decisions.ARCHITECTURES))
@@ -355,7 +367,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "domains":
         return cmd_domains(cfg)
     if a.cmd == "patterns":
-        return cmd_patterns(cfg, a.id)
+        return cmd_patterns(cfg, a.id, a.categoria)
     if a.cmd == "decide":
         return cmd_decide(cfg, a)
     if a.cmd == "check":

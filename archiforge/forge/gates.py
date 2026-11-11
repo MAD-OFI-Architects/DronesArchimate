@@ -236,6 +236,26 @@ def solid_gate(cfg: Config, d) -> Gate:
     return Gate(not found, "SOLID", "\n".join(str(f) for f in found[:30]) or "sin violaciones detectables de SRP, OCP, LSP, ISP ni DIP.")
 
 
+def patterns_gate(cfg: Config, d) -> Gate:
+    """Los patrones con forma comprobable que el arquitecto ELIGIÓ existen estructuralmente en el código (ver forge/patrones.py).
+    No se evalúa lo que no se eligió, ni los patrones sin chequeo estructural."""
+    from . import decisions, patrones
+    cat = decisions.catalog(cfg.tool_root)
+    chosen = [(pid, cat[pid]) for pid in d.patterns if d.uses(pid) and cat.get(pid, {}).get("chequeo")]
+    root = _svc(cfg, d.slug)
+    if not chosen or not root.exists():
+        return Gate(True, "patrones: estructura", "no hay patrones elegidos con comprobación estructural." if not chosen else f"{root} todavía no existe.")
+    decls = patrones.declarations(root, d.language)
+    fails = []
+    for pid, spec in chosen:
+        where = d.patterns[pid].get("aplicar_en", "")
+        for chk in spec["chequeo"]:
+            ok, detail = patrones.run_check(chk, decls, d.language)
+            if not ok:
+                fails.append(f"«{spec['nombre']}»" + (f" (aplicar_en: {where})" if where else "") + f": {detail}.")
+    return Gate(not fails, "patrones: estructura", "\n".join(fails) or f"{len(chosen)} patrón(es) elegido(s) con su estructura presente en el código.")
+
+
 def _is_local(root: Path, top: str) -> bool:
     return any((root / base / top).exists() or (root / base / f"{top}.py").exists() for base in ("", "src"))
 
@@ -287,7 +307,7 @@ def build_gates(cfg: Config, d, layers: set[str] | None, label: str) -> list[Gat
     # El cableado se exige donde se ensamblan los adaptadores (etapa de adaptadores): antes, los esqueletos sembrados en S02
     # (p. ej. la mensajería durable) todavía no tienen composition root y no deben fallar las capas de dominio/aplicación.
     if layers is None or "infrastructure" in layers:
-        g += [wiring_gate(cfg, d)]
+        g += [wiring_gate(cfg, d), patterns_gate(cfg, d)]
     g += [solid_gate(cfg, d)]
     return g
 
@@ -338,6 +358,16 @@ def adr_gate(cfg: Config, manifest: dict, final: bool = True) -> Gate:
     for pid, p in d.patterns.items():
         if p.get("usar") and cat.get(pid) and not any(norm(cat[pid]["nombre"]) in norm(" ".join(r)) or pid in norm(r[0]) for r in pat_rows):
             problems.append(f"El patrón elegido «{cat[pid]['nombre']}» no aparece en la tabla de patrones del ADR.")
+    code = _all_code(cfg)
+    for pid, p in d.patterns.items():
+        need = int(cat.get(pid, {}).get("min_clases", 0) or 0)
+        if not (p.get("usar") and need):
+            continue
+        row = next((r for r in pat_rows if norm(cat[pid]["nombre"]) in norm(" ".join(r)) or pid in norm(r[0])), None)
+        cited = {sym for cell in (row or []) for sym in re.findall(r"`([A-Za-z_][A-Za-z0-9_]*)`", cell) if any(sym in t for _, _, _, t in code)}
+        if row is not None and len(cited) < need:
+            problems.append(f"El patrón «{cat[pid]['nombre']}» necesita citar al menos {need} clases reales "
+                            f"(roles: {', '.join(cat[pid].get('roles', []))}); la tabla cita {len(cited)}.")
     checked = 0
     for cells in pat_rows:
         for cell in cells:
@@ -351,8 +381,8 @@ def adr_gate(cfg: Config, manifest: dict, final: bool = True) -> Gate:
 
 
 def decisions_catalog(cfg: Config) -> dict:
-    import tomllib
-    return tomllib.loads((cfg.tool_root / "catalog" / "patrones.toml").read_text(encoding="utf-8"))
+    from . import decisions
+    return decisions.catalog(cfg.tool_root)
 
 
 def _all_code(cfg: Config):

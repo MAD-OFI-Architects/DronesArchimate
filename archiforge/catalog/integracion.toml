@@ -1,0 +1,144 @@
+# Patrones de integración, mensajería y resiliencia. Referencia informativa.
+
+[event-sourcing]
+nombre = "Event Sourcing"
+categoria = "persistencia"
+que_es = "El estado de un agregado se guarda como la secuencia de sus eventos y se reconstruye reproduciéndolos."
+cuando_si = "Se necesita auditoría completa, reconstruir el estado en cualquier momento o derivar varias vistas de lectura."
+cuando_no = "Un CRUD con historial simple basta; añade versionado de eventos y reconstrucción."
+costo = "Alto: almacén de eventos, versionado y proyecciones."
+roles = ["EventStore (anexar y leer por agregado)", "Eventos del agregado", "Reconstrucción por reproducción"]
+principios = ["SRP", "OCP"]
+chequeo = ["clase_con_nombre:(?i)event.?store|almacen.?de.?eventos"]
+min_clases = 2
+requiere = ["eventos"]
+requiere_donde = true
+fuente = "https://microservices.io/patterns/data/event-sourcing.html"
+
+[saga]
+nombre = "Saga"
+categoria = "integración"
+que_es = "Coordina una transacción de negocio que abarca varios servicios mediante pasos locales y compensaciones, sin transacción distribuida."
+cuando_si = "Una operación de negocio cruza servicios con bases de datos propias y debe poder deshacerse parcialmente."
+cuando_no = "La operación vive dentro de un solo servicio y una transacción local alcanza."
+costo = "Alto: estados intermedios, compensaciones y diseño de fallos."
+roles = ["Saga (secuencia de pasos)", "Paso local", "Compensación"]
+principios = ["SRP"]
+chequeo = ["clase_con_nombre:(?i)saga"]
+min_clases = 1
+requiere = ["eventos"]
+requiere_donde = true
+fuente = "https://microservices.io/patterns/data/saga.html"
+
+[idempotent-consumer]
+nombre = "Idempotent Consumer"
+categoria = "integración"
+que_es = "Un consumidor registra los mensajes ya procesados para que recibir el mismo mensaje dos veces no repita sus efectos."
+cuando_si = "El bus entrega al menos una vez y un duplicado causaría efectos dobles."
+cuando_no = "La operación ya es idempotente por naturaleza."
+costo = "Bajo-medio: tabla de mensajes procesados."
+roles = ["Registro de mensajes procesados", "Consumidor que consulta el registro antes de actuar"]
+principios = ["SRP"]
+chequeo = ["clase_con_nombre:(?i)idempot|mensaje.?entrante|bandeja.?de.?entrada|inbox"]
+min_clases = 1
+requiere = ["eventos"]
+requiere_donde = true
+fuente = "https://microservices.io/patterns/communication-style/idempotent-consumer.html"
+
+[dead-letter-queue]
+nombre = "Dead Letter Queue"
+categoria = "integración"
+que_es = "Los mensajes que no se pueden procesar tras varios intentos se apartan en una cola aparte para revisarlos, sin bloquear el resto."
+cuando_si = "Un mensaje defectuoso no debe detener el flujo y debe poder inspeccionarse y reintentarse después."
+cuando_no = "El volumen es tan bajo que un fallo se atiende al instante."
+costo = "Bajo-medio: almacén de mensajes fallidos y su operación."
+roles = ["Cola o tabla de mensajes fallidos", "Política de cuántos intentos antes de apartar"]
+principios = ["SRP"]
+chequeo = ["clase_con_nombre:(?i)dead.?letter|cartas.?muertas|dlq|fallidos"]
+min_clases = 1
+requiere = ["eventos"]
+requiere_donde = true
+
+[circuit-breaker]
+nombre = "Circuit Breaker"
+categoria = "resiliencia"
+que_es = "Deja de llamar a una dependencia que está fallando durante un tiempo, para no saturarla ni acumular esperas, y vuelve a probar de forma controlada."
+cuando_si = "Se llama a servicios remotos que pueden caerse y los fallos en cascada son un riesgo."
+cuando_no = "La dependencia es local y fiable."
+costo = "Medio: estados (cerrado, abierto, semiabierto) y su configuración."
+roles = ["Disyuntor con estados cerrado, abierto y semiabierto", "Llamada protegida"]
+principios = ["SRP", "OCP"]
+chequeo = ["clase_con_nombre:(?i)circuit|disyuntor"]
+min_clases = 1
+requiere_donde = true
+fuente = "https://microservices.io/patterns/reliability/circuit-breaker.html"
+
+[retry]
+nombre = "Retry"
+categoria = "resiliencia"
+que_es = "Repite una operación que falló por una causa transitoria, con espera creciente y un máximo de intentos."
+cuando_si = "Los fallos son momentáneos (red, bloqueos) y la operación es segura de repetir."
+cuando_no = "La operación no es idempotente o el fallo es permanente: reintentar solo empeora."
+costo = "Bajo; mal configurado multiplica la carga sobre una dependencia caída."
+roles = ["Política de reintentos (máximo, espera, qué errores)", "Operación repetible"]
+principios = ["SRP"]
+chequeo = ["clase_con_nombre:(?i)retry|reintent"]
+min_clases = 1
+requiere_donde = true
+fuente = "https://learn.microsoft.com/es-es/azure/architecture/patterns/retry"
+
+[timeout]
+nombre = "Timeout"
+categoria = "resiliencia"
+que_es = "Fija un tiempo máximo de espera para cada llamada externa y falla de forma controlada al vencerlo."
+cuando_si = "Una dependencia lenta podría bloquear los hilos o las solicitudes del servicio."
+cuando_no = "Operaciones locales y acotadas."
+costo = "Bajo; exige elegir tiempos realistas."
+roles = ["Límite de tiempo por llamada", "Manejo del vencimiento"]
+principios = ["SRP"]
+chequeo = ["clase_con_nombre:(?i)timeout|tiempo.?limite|tiempo.?de.?espera"]
+min_clases = 1
+requiere_donde = true
+
+[bulkhead]
+nombre = "Bulkhead"
+categoria = "resiliencia"
+que_es = "Aísla recursos (hilos, conexiones, colas) por dependencia o función, de modo que el fallo de una no agote los de las demás."
+cuando_si = "Una dependencia lenta no debe consumir la capacidad que necesitan otras funciones."
+cuando_no = "Una sola dependencia o carga muy pequeña."
+costo = "Medio: dimensionar cada compartimiento."
+roles = ["Compartimiento con capacidad acotada", "Llamadas asignadas a su compartimiento"]
+principios = ["SRP"]
+chequeo = ["clase_con_nombre:(?i)bulkhead|mampara|compartimiento"]
+min_clases = 1
+requiere_donde = true
+fuente = "https://learn.microsoft.com/es-es/azure/architecture/patterns/bulkhead"
+
+[rate-limiter]
+nombre = "Rate Limiter"
+categoria = "resiliencia"
+que_es = "Limita cuántas solicitudes se aceptan por unidad de tiempo, por cliente o globalmente."
+cuando_si = "Hay que proteger el servicio de ráfagas o de un cliente que lo satura."
+cuando_no = "Tráfico bajo y de clientes confiables."
+costo = "Bajo-medio: estado compartido si hay varias instancias."
+roles = ["Limitador (cubeta de fichas o ventana)", "Rechazo con respuesta controlada"]
+principios = ["SRP"]
+chequeo = ["clase_con_nombre:(?i)rate.?limit|limitador|token.?bucket"]
+min_clases = 1
+requiere_donde = true
+fuente = "https://learn.microsoft.com/es-es/azure/architecture/patterns/rate-limiting-pattern"
+
+[materialized-view]
+nombre = "Materialized View"
+categoria = "persistencia"
+que_es = "Una vista de lectura precalculada y almacenada, que se mantiene actualizada a partir de los cambios del modelo de escritura."
+cuando_si = "Las consultas son costosas o combinan datos de varios orígenes y se leen mucho más de lo que se escriben."
+cuando_no = "Las consultas son simples y rápidas sobre el modelo original."
+costo = "Medio: consistencia eventual y lógica de actualización."
+roles = ["Vista de lectura almacenada", "Proyector que la actualiza"]
+principios = ["SRP", "OCP"]
+chequeo = ["clase_con_nombre:(?i)vista.?materializada|materializ|proyecci|projection"]
+min_clases = 2
+requiere = ["cqrs"]
+requiere_donde = true
+fuente = "https://learn.microsoft.com/es-es/azure/architecture/patterns/materialized-view"

@@ -13,8 +13,21 @@ DATABASES = ("mongodb", "postgresql")
 DECISION_KEYS = ("lenguaje", "arquitectura", "estilo", "base_de_datos")
 
 
+CATALOG_ORDER = ("patrones", "creacionales", "estructurales", "comportamiento", "dominio", "integracion")
+
+
 def catalog(root: Path) -> dict[str, dict]:
-    return tomllib.loads((root / "catalog" / "patrones.toml").read_text(encoding="utf-8"))
+    """Catálogo de patrones: todos los `catalog/*.toml` (en el orden de CATALOG_ORDER y luego cualquier archivo propio que se añada)."""
+    folder = root / "catalog"
+    names = [n for n in CATALOG_ORDER if (folder / f"{n}.toml").exists()] + sorted(
+        p.stem for p in folder.glob("*.toml") if p.stem not in CATALOG_ORDER)
+    out: dict[str, dict] = {}
+    for n in names:
+        for pid, spec in tomllib.loads((folder / f"{n}.toml").read_text(encoding="utf-8")).items():
+            if pid in out:
+                raise SystemExit(f"catalog/{n}.toml: el patrón «{pid}» está repetido.")
+            out[pid] = spec
+    return out
 
 
 def path_for(cfg: Config, slug: str) -> Path:
@@ -75,6 +88,8 @@ def validate(cfg: Config, d: Domain) -> tuple[list[str], list[str]]:
         if pid not in cat:
             errors.append(f"patrón «{pid}» desconocido (catálogo: {', '.join(cat)}).")
     for pid, p in d.patterns.items():
+        if p.get("usar") and cat.get(pid, {}).get("requiere_donde") and not str(p.get("aplicar_en", "")).strip():
+            errors.append(f"Indica dónde se aplica «{cat[pid]['nombre']}» (campo aplicar_en): el patrón no sabe sobre qué parte del servicio actuar.")
         for req in cat.get(pid, {}).get("requiere", []):
             if p.get("usar") and not d.uses(req):
                 errors.append(f"el patrón «{pid}» requiere «{req}» (actívalo o desactiva «{pid}»).")

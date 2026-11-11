@@ -22,7 +22,7 @@ manifiesto = "No exige símbolos propios; el ADR debe citar las clases de la cad
 
 [memento]
 nombre = "Memento"
-categoria = "dominio"
+categoria = "comportamiento"
 que_es = "Snapshot inmutable del estado del agregado para persistirlo y reconstruirlo sin exponer sus internos."
 cuando_si = "El agregado se guarda como documento o necesita restaurarse/deshacerse; el dominio no debe conocer la persistencia."
 cuando_no = "El ORM ya mapea el agregado directamente y no hay deshacer."
@@ -31,7 +31,7 @@ manifiesto = "<Raiz>Memento por agregado."
 
 [state]
 nombre = "State"
-categoria = "dominio"
+categoria = "comportamiento"
 que_es = "El ciclo de vida del agregado se modela con estados y transiciones validadas."
 cuando_si = "El agregado tiene varios estados y reglas de transición (p. ej. abierta → en ejecución → liberada → cerrada)."
 cuando_no = "Dos o tres estados simples: un enum con validación alcanza."

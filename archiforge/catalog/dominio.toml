@@ -1,0 +1,124 @@
+# Patrones de dominio, aplicación y persistencia. Referencia informativa.
+
+[repository]
+nombre = "Repository"
+categoria = "dominio"
+que_es = "Una colección de agregados con una interfaz del dominio; oculta cómo y dónde se persisten."
+cuando_si = "El dominio no debe conocer la base de datos y los agregados se cargan y guardan por identidad."
+cuando_no = "Aplicación de solo lectura sobre una tabla sin reglas de negocio."
+costo = "Bajo: un puerto y una implementación por agregado."
+roles = ["IRepositorio (puerto en el dominio)", "Repositorio (implementación en infraestructura)"]
+principios = ["DIP", "ISP"]
+chequeo = ["clase_con_nombre:(?i)repositor"]
+min_clases = 2
+requiere_donde = true
+fuente = "https://martinfowler.com/eaaCatalog/repository.html"
+
+[unit-of-work]
+nombre = "Unit of Work"
+categoria = "persistencia"
+que_es = "Agrupa los cambios de una operación de negocio y los confirma o revierte juntos."
+cuando_si = "Una operación modifica varios agregados o guarda el agregado junto con su bandeja de eventos."
+cuando_no = "Cada operación toca un solo registro y la base de datos ya da la atomicidad."
+costo = "Medio: gestión de transacciones y de objetos rastreados."
+roles = ["UnidadDeTrabajo (registrar, confirmar, revertir)"]
+principios = ["SRP"]
+chequeo = ["clase_con_nombre:(?i)unidad.?de.?trabajo|unit.?of.?work|unit_of_work"]
+min_clases = 1
+requiere_donde = true
+fuente = "https://martinfowler.com/eaaCatalog/unitOfWork.html"
+
+[domain-events]
+nombre = "Domain Events"
+categoria = "dominio"
+que_es = "El agregado levanta eventos inmutables que describen hechos del negocio ocurridos; otros componentes reaccionan sin que el agregado los conozca."
+cuando_si = "Un cambio en un agregado debe desencadenar efectos en otros (dentro del mismo servicio) sin acoplarlos."
+cuando_no = "No hay reacciones a los cambios."
+costo = "Bajo-medio: despacho de eventos y manejadores."
+roles = ["EventoDeDominio (inmutable)", "Raíz del agregado (levanta eventos)", "Manejador del evento"]
+principios = ["SRP", "OCP"]
+chequeo = ["clase_con_nombre:(?i)evento"]
+min_clases = 2
+requiere_donde = true
+
+[domain-service]
+nombre = "Domain Service"
+categoria = "dominio"
+que_es = "Una operación del dominio que no pertenece naturalmente a una entidad ni a un objeto de valor, modelada como servicio sin estado."
+cuando_si = "Una regla involucra varios agregados o conceptos y forzarla en uno distorsiona el modelo."
+cuando_no = "La lógica cabe en un agregado: moverla a un servicio vacía el modelo."
+costo = "Bajo; riesgo de modelo anémico si se abusa."
+roles = ["ServicioDeDominio (sin estado, lenguaje ubicuo)"]
+principios = ["SRP"]
+chequeo = ["clase_con_nombre:(?i)servicio"]
+min_clases = 1
+requiere_donde = true
+
+[null-object]
+nombre = "Null Object"
+categoria = "dominio"
+que_es = "Un objeto que implementa la interfaz y no hace nada, para evitar comprobaciones de nulos."
+cuando_si = "La ausencia de un colaborador es un caso normal con comportamiento neutro."
+cuando_no = "La ausencia es un error que debe notarse: ocultarla enmascara fallos."
+costo = "Bajo: una clase por interfaz."
+roles = ["Interfaz", "Implementación real", "Implementación nula"]
+principios = ["LSP", "OCP"]
+chequeo = ["abstraccion_con_implementaciones:2"]
+min_clases = 3
+requiere_donde = true
+fuente = "https://martinfowler.com/eaaCatalog/specialCase.html"
+
+[dto]
+nombre = "Data Transfer Object"
+categoria = "aplicación"
+que_es = "Un objeto plano que lleva datos entre capas o servicios, con la forma que necesita el consumidor y no la del dominio."
+cuando_si = "La API o la capa de presentación no debe ver las entidades del dominio."
+cuando_no = "La forma del DTO es idéntica al objeto de dominio y no hay razón para separarlos."
+costo = "Bajo-medio: mapeo entre dominio y DTO."
+roles = ["Dto (sin comportamiento)", "Mapeador (dominio ↔ Dto)"]
+principios = ["SRP", "DIP"]
+chequeo = ["clase_con_nombre:(?i)dto"]
+min_clases = 1
+requiere_donde = true
+fuente = "https://martinfowler.com/eaaCatalog/dataTransferObject.html"
+
+[service-layer]
+nombre = "Service Layer"
+categoria = "aplicación"
+que_es = "Una capa que define los casos de uso de la aplicación y coordina el dominio, sin contener reglas de negocio."
+cuando_si = "Varios clientes (API, mensajería, tareas) comparten los mismos casos de uso."
+cuando_no = "Un solo cliente con casos de uso triviales."
+costo = "Bajo."
+roles = ["Servicio de aplicación / manejador de caso de uso"]
+principios = ["SRP", "DIP"]
+min_clases = 1
+requiere_donde = true
+fuente = "https://martinfowler.com/eaaCatalog/serviceLayer.html"
+
+[data-mapper]
+nombre = "Data Mapper"
+categoria = "persistencia"
+que_es = "Una capa de mapeo mueve datos entre objetos de dominio y la base de datos, manteniéndolos independientes entre sí."
+cuando_si = "El modelo de dominio y el esquema de datos evolucionan por separado."
+cuando_no = "El esquema y el modelo coinciden y un ORM los mapea directamente."
+costo = "Medio: código de mapeo."
+roles = ["Mapeador (objeto ↔ registro)", "Objeto de dominio sin conocimiento de la base"]
+principios = ["SRP", "DIP"]
+chequeo = ["clase_con_nombre:(?i)mapper|mapeador"]
+min_clases = 2
+requiere_donde = true
+fuente = "https://martinfowler.com/eaaCatalog/dataMapper.html"
+
+[identity-map]
+nombre = "Identity Map"
+categoria = "persistencia"
+que_es = "Garantiza que cada registro se cargue una sola vez por operación, guardando los objetos ya cargados por identidad."
+cuando_si = "Una operación puede pedir el mismo agregado varias veces y debe ver siempre la misma instancia."
+cuando_no = "Operaciones cortas que cargan cada agregado una vez."
+costo = "Bajo-medio: ciclo de vida del mapa ligado a la operación."
+roles = ["MapaDeIdentidad (identidad → instancia)"]
+principios = ["SRP"]
+chequeo = ["clase_con_nombre:(?i)identity.?map|mapa.?de.?identidad"]
+min_clases = 1
+requiere_donde = true
+fuente = "https://martinfowler.com/eaaCatalog/identityMap.html"

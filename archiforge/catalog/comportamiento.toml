@@ -1,0 +1,124 @@
+# Patrones de comportamiento (GoF). Referencia informativa. (Memento y State viven en patrones.toml.)
+
+[chain-of-responsibility]
+nombre = "Chain of Responsibility"
+categoria = "comportamiento"
+que_es = "Pasa una petición por una cadena de manejadores; cada uno decide si la procesa o la entrega al siguiente."
+cuando_si = "Varios objetos pueden atender una petición y el conjunto o el orden cambia en ejecución."
+cuando_no = "Siempre atiende el mismo objeto."
+costo = "Bajo-medio: una petición puede quedar sin atender si ningún manejador la toma."
+roles = ["Handler (interfaz con referencia al siguiente)", "ConcreteHandler (≥2)", "Client"]
+principios = ["SRP", "OCP"]
+chequeo = ["abstraccion_con_implementaciones:2", "envoltorio"]
+min_clases = 3
+requiere_donde = true
+fuente = "https://refactoring.guru/es/design-patterns/chain-of-responsibility"
+
+[command]
+nombre = "Command"
+categoria = "comportamiento"
+que_es = "Encapsula una petición como un objeto, lo que permite parametrizar, encolar, registrar o deshacer operaciones."
+cuando_si = "Las operaciones deben ponerse en cola, auditarse, reintentarse o deshacerse, o el emisor no debe conocer al receptor."
+cuando_no = "Las llamadas son directas y nunca se difieren ni se deshacen."
+costo = "Medio: una clase por operación."
+roles = ["Command (interfaz con ejecutar)", "ConcreteCommand (≥2)", "Receiver", "Invoker"]
+principios = ["SRP", "OCP"]
+chequeo = ["abstraccion_con_implementaciones:2"]
+min_clases = 3
+requiere_donde = true
+fuente = "https://refactoring.guru/es/design-patterns/command"
+
+[interpreter]
+nombre = "Interpreter"
+categoria = "comportamiento"
+que_es = "Define una gramática simple como una jerarquía de expresiones y un intérprete que evalúa oraciones del lenguaje."
+cuando_si = "Hay un lenguaje pequeño y estable (reglas, filtros, expresiones) que se evalúa muchas veces."
+cuando_no = "La gramática es grande o cambia: conviene un generador de analizadores."
+costo = "Alto si la gramática crece: una clase por regla."
+roles = ["AbstractExpression (interfaz interpretar)", "TerminalExpression", "NonterminalExpression", "Context"]
+principios = ["OCP"]
+chequeo = ["abstraccion_con_implementaciones:2"]
+min_clases = 3
+requiere_donde = true
+
+[iterator]
+nombre = "Iterator"
+categoria = "comportamiento"
+que_es = "Recorre los elementos de una colección sin exponer su estructura interna."
+cuando_si = "Una colección propia tiene una estructura compleja (árbol, grafo, paginada) y se necesitan varias formas de recorrerla."
+cuando_no = "La colección es una lista o diccionario estándar del lenguaje."
+costo = "Bajo; los lenguajes modernos lo traen (IEnumerable, Iterator, generadores)."
+roles = ["Iterator (siguiente, hay más)", "ConcreteIterator", "Aggregate (crea el iterador)"]
+principios = ["SRP", "OCP"]
+min_clases = 2
+requiere_donde = true
+fuente = "https://refactoring.guru/es/design-patterns/iterator"
+
+[mediator]
+nombre = "Mediator"
+categoria = "comportamiento"
+que_es = "Centraliza la comunicación entre objetos en un mediador, de modo que no se referencien directamente entre sí."
+cuando_si = "Muchos componentes se hablan entre sí y las dependencias cruzadas son difíciles de seguir."
+cuando_no = "Pocos colaboradores: el mediador se vuelve una clase que lo sabe todo."
+costo = "Medio: concentra lógica en un punto."
+roles = ["Mediator (interfaz)", "ConcreteMediator", "Colleague"]
+principios = ["SRP", "DIP"]
+min_clases = 3
+requiere_donde = true
+fuente = "https://refactoring.guru/es/design-patterns/mediator"
+
+[observer]
+nombre = "Observer"
+categoria = "comportamiento"
+que_es = "Un sujeto mantiene una lista de suscriptores y los notifica cuando cambia su estado."
+cuando_si = "Un cambio en un objeto debe reflejarse en un número variable de otros sin acoplarlos."
+cuando_no = "Hay un solo interesado fijo, o el orden de notificación es crítico y debe ser explícito."
+costo = "Bajo-medio: notificaciones en cascada difíciles de depurar."
+roles = ["Subject (suscribir, notificar)", "Observer (interfaz de actualización)", "ConcreteObserver (≥1)"]
+principios = ["OCP", "DIP"]
+chequeo = ["suscriptores"]
+min_clases = 3
+requiere_donde = true
+fuente = "https://refactoring.guru/es/design-patterns/observer"
+
+[strategy]
+nombre = "Strategy"
+categoria = "comportamiento"
+que_es = "Define una familia de algoritmos intercambiables detrás de una interfaz, y el contexto delega en la estrategia elegida."
+cuando_si = "Un comportamiento tiene varias variantes que se eligen por configuración o en ejecución, y evita cadenas de condicionales por tipo."
+cuando_no = "Hay una sola variante y no se espera otra."
+costo = "Bajo-medio: una clase por variante."
+roles = ["Strategy (interfaz)", "ConcreteStrategy (≥2)", "Context (usa una Strategy)"]
+principios = ["OCP", "DIP"]
+chequeo = ["abstraccion_con_implementaciones:2"]
+min_clases = 3
+requiere_donde = true
+fuente = "https://refactoring.guru/es/design-patterns/strategy"
+
+[template-method]
+nombre = "Template Method"
+categoria = "comportamiento"
+que_es = "Una clase base define el esqueleto de un algoritmo y las subclases rellenan los pasos variables."
+cuando_si = "Varios flujos comparten la misma secuencia y solo difieren en algunos pasos."
+cuando_no = "Las variantes cambian la estructura del algoritmo, no solo pasos: la herencia queda rígida."
+costo = "Bajo; acopla las subclases a la base."
+roles = ["AbstractClass (método plantilla)", "ConcreteClass (≥1)"]
+principios = ["OCP"]
+chequeo = ["plantilla"]
+min_clases = 2
+requiere_donde = true
+fuente = "https://refactoring.guru/es/design-patterns/template-method"
+
+[visitor]
+nombre = "Visitor"
+categoria = "comportamiento"
+que_es = "Separa un algoritmo de los objetos sobre los que opera, añadiendo operaciones nuevas sin modificar sus clases."
+cuando_si = "Una jerarquía estable necesita muchas operaciones distintas que no deben vivir en sus clases."
+cuando_no = "La jerarquía cambia con frecuencia: cada elemento nuevo obliga a tocar todos los visitantes."
+costo = "Alto: doble despacho y acoplamiento con la jerarquía."
+roles = ["Visitor (una visita por elemento)", "ConcreteVisitor (≥1)", "Element (aceptar)", "ConcreteElement (≥2)"]
+principios = ["OCP", "SRP"]
+chequeo = ["abstraccion_con_implementaciones:2"]
+min_clases = 4
+requiere_donde = true
+fuente = "https://refactoring.guru/es/design-patterns/visitor"

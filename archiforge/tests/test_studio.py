@@ -100,7 +100,14 @@ def test_blank_draft_preselects_nothing_and_offers_the_whole_catalog(studio):
     assert (d.language, d.architecture, d.style, d.database) == ("", "", "", "")
     assert d.port == 5101 and not any(v["usar"] for v in d.patterns.values()) and set(d.patterns) == set(studio.catalog())
     ref = studio.reference()
-    assert [r["id"] for r in ref] == list(studio.catalog()) and all({"nombre", "que_es", "cuando_si", "cuando_no", "costo"} <= r.keys() for r in ref)
+    assert {r["id"] for r in ref} == set(studio.catalog()) and len(ref) >= 50
+    seen, last = [], None
+    for r in ref:                                                                  # cada categoría aparece en un solo bloque contiguo
+        if r["categoria"] != last:
+            assert r["categoria"] not in seen, r["categoria"]
+            seen.append(r["categoria"])
+            last = r["categoria"]
+    assert seen[:3] == ["creacional", "estructural", "comportamiento"] and all({"nombre", "que_es", "cuando_si", "cuando_no", "costo"} <= r.keys() for r in ref)
     assert not any("recomend" in str(r).lower() or "evaluaci" in str(r).lower() for r in ref)
 
 

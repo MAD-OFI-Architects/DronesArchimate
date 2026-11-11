@@ -18,7 +18,7 @@ if stage in ("S03-adr", "S50-verify"):
     import json
     man = json.loads((root / ".forge-dry" / slug / "manifest.json").read_text(encoding="utf-8"))
     cls = [i["name"] for i in man["items"] if i["kind"] in ("aggregate_root", "repository_port")][:2] or ["X"]
-    pats = re.findall(r"\*\*Patrón elegido\*\* `\w+` — ([^\n]+)", text)
+    pats = re.findall(r"\*\*Patrón elegido\*\* `[\w-]+` — ([^\n]+)", text)
     rows = "".join(f"| {p} | {slug} | `{cls[i % len(cls)]}` | x |\n" for i, p in enumerate(pats)) or f"| Repository | {slug} | `{cls[0]}` | x |\n"
     (base / "decisiones-arquitectura.md").write_text(
         "# Decisiones\n## Arquitectura\n## Estilo\n## Base de datos\n## Patrones\n| Patrón | Dominio | Clases | Por qué |\n|---|---|---|---|\n" + rows +

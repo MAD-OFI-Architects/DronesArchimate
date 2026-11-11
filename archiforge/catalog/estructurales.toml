@@ -1,0 +1,96 @@
+# Patrones estructurales (GoF). Referencia informativa.
+
+[adapter]
+nombre = "Adapter"
+categoria = "estructural"
+que_es = "Convierte la interfaz de una clase existente en la que el cliente espera, para que colaboren clases con interfaces incompatibles."
+cuando_si = "Se integra una librería o servicio cuyo contrato no se puede cambiar y no coincide con el propio."
+cuando_no = "Se controla ambos lados: es más simple alinear las interfaces."
+costo = "Bajo: una clase por adaptación."
+roles = ["Target (interfaz que espera el cliente)", "Adaptee (clase existente)", "Adapter"]
+principios = ["SRP", "OCP", "DIP"]
+min_clases = 2
+requiere_donde = true
+fuente = "https://refactoring.guru/es/design-patterns/adapter"
+
+[bridge]
+nombre = "Bridge"
+categoria = "estructural"
+que_es = "Separa una abstracción de su implementación en dos jerarquías independientes que se combinan por composición."
+cuando_si = "Dos dimensiones varían por separado (por ejemplo, tipo de reporte y formato de salida) y una jerarquía única se multiplicaría."
+cuando_no = "Solo una dimensión varía."
+costo = "Medio: dos jerarquías y una referencia entre ellas."
+roles = ["Abstraction", "RefinedAbstraction", "Implementor (interfaz)", "ConcreteImplementor (≥2)"]
+principios = ["OCP", "DIP"]
+chequeo = ["abstraccion_con_implementaciones:2"]
+min_clases = 3
+requiere_donde = true
+fuente = "https://refactoring.guru/es/design-patterns/bridge"
+
+[composite]
+nombre = "Composite"
+categoria = "estructural"
+que_es = "Compone objetos en estructuras de árbol y permite tratar de la misma forma a un elemento individual y a un grupo."
+cuando_si = "El dominio es jerárquico (partes y conjuntos) y el cliente debe operar sobre ambos con la misma interfaz."
+cuando_no = "No hay jerarquía parte-todo."
+costo = "Medio: la interfaz común puede quedar demasiado general."
+roles = ["Component (interfaz)", "Leaf", "Composite (contiene componentes)"]
+principios = ["OCP", "LSP"]
+chequeo = ["envoltorio"]
+min_clases = 3
+requiere_donde = true
+fuente = "https://refactoring.guru/es/design-patterns/composite"
+
+[decorator]
+nombre = "Decorator"
+categoria = "estructural"
+que_es = "Añade comportamiento a un objeto envolviéndolo en otro que implementa la misma interfaz, sin modificar su clase."
+cuando_si = "Se combinan responsabilidades opcionales (registro, caché, validación) que no deben vivir en la clase base."
+cuando_no = "El comportamiento extra es siempre el mismo y fijo: basta con ponerlo en la clase."
+costo = "Bajo-medio: muchas clases pequeñas y orden de composición que importa."
+roles = ["Component (interfaz)", "ConcreteComponent", "Decorator (envuelve un Component)"]
+principios = ["SRP", "OCP"]
+chequeo = ["envoltorio"]
+min_clases = 3
+requiere_donde = true
+fuente = "https://refactoring.guru/es/design-patterns/decorator"
+
+[facade]
+nombre = "Facade"
+categoria = "estructural"
+que_es = "Ofrece una interfaz simple a un subsistema complejo, ocultando sus clases internas."
+cuando_si = "Un conjunto de clases requiere una secuencia de llamadas coordinada y el cliente solo necesita un caso de uso."
+cuando_no = "El cliente necesita controlar el detalle del subsistema."
+costo = "Bajo; puede convertirse en una clase que lo sabe todo si no se acota."
+roles = ["Facade", "Subsistema (clases internas)"]
+principios = ["SRP", "DIP"]
+min_clases = 2
+requiere_donde = true
+fuente = "https://refactoring.guru/es/design-patterns/facade"
+
+[flyweight]
+nombre = "Flyweight"
+categoria = "estructural"
+que_es = "Comparte el estado intrínseco e inmutable entre muchos objetos para ahorrar memoria, y entrega el estado extrínseco desde fuera."
+cuando_si = "Se crean muchísimos objetos casi idénticos y la memoria es el cuello de botella."
+cuando_no = "Hay pocos objetos o poco estado repetido."
+costo = "Medio: complica el código a cambio de memoria."
+roles = ["Flyweight (estado compartido inmutable)", "FlyweightFactory (caché de instancias)", "Context (estado extrínseco)"]
+principios = ["SRP"]
+min_clases = 2
+requiere_donde = true
+fuente = "https://refactoring.guru/es/design-patterns/flyweight"
+
+[proxy]
+nombre = "Proxy"
+categoria = "estructural"
+que_es = "Un sustituto con la misma interfaz que el objeto real controla el acceso a él (carga diferida, permisos, registro, acceso remoto)."
+cuando_si = "Se necesita interponer control sobre un objeto sin que el cliente lo note."
+cuando_no = "No hay nada que controlar entre el cliente y el objeto."
+costo = "Bajo: una clase que delega, con latencia añadida."
+roles = ["Subject (interfaz)", "RealSubject", "Proxy (misma interfaz, referencia al real)"]
+principios = ["OCP", "DIP"]
+chequeo = ["envoltorio"]
+min_clases = 3
+requiere_donde = true
+fuente = "https://refactoring.guru/es/design-patterns/proxy"

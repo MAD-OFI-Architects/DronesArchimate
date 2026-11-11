@@ -72,3 +72,6 @@ BuildScreen #progress { height: 12; }
 .pair > Vertical { width: 1fr; height: auto; margin-right: 1; }
 DomainsScreen #left { width: 5fr; }
 DomainsScreen #right { width: 3fr; }
+
+#where { height: auto; }
+#where Input { height: 3; margin-bottom: 1; }
