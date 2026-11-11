@@ -16,8 +16,8 @@ from forge.studio.ui.app import StudioApp  # noqa: E402
 from forge.studio.ui.widgets import Banner  # noqa: E402
 
 TOOL = Path(__file__).resolve().parents[1]
-ARCHIMATE = TOOL.parent / "modelo/drones-mantenimiento.archimate"
-DOCS = TOOL.parent
+ARCHIMATE = TOOL.parent / "diseno/modelo/drones-mantenimiento.archimate"
+DOCS = TOOL.parent / "diseno"
 SIZE = (150, 46)
 
 

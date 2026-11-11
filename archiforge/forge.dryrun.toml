@@ -2,8 +2,8 @@
 # Uso: python -m forge -c forge.dryrun.toml decide "Repuestos del Taller" --lang python --arch hexagonal --style microservicio --db postgresql
 #      python -m forge -c forge.dryrun.toml build "Repuestos del Taller" --laps 1 --skip-doctor
 [inputs]
-archimate = "../modelo/drones-mantenimiento.archimate"
-docs_dir = ".."
+archimate = "../diseno/modelo/drones-mantenimiento.archimate"
+docs_dir = "../diseno"
 reference_guide = "reference/guia_ddd.md"
 
 [output]

@@ -2,7 +2,7 @@
 
 Este directorio es la **salida ejecutable** de ArchiForge para la evaluación final. Está generado a partir de:
 
-- `modelo/drones-mantenimiento.archimate`
+- `diseno/modelo/drones-mantenimiento.archimate`
 - las decisiones de arquitectura de `archiforge/decisiones/`
 
 No hace falta volver a ejecutar el generador para levantar el producto: todo lo necesario está incluido.

@@ -2,8 +2,8 @@
 # Sirve para construir OTRO dominio en paralelo al que corre con OpenCode (forge.toml).
 # Uso:  python -m forge -c forge.claude.toml build "Intervenciones"
 [inputs]
-archimate = "../modelo/drones-mantenimiento.archimate"
-docs_dir = ".."
+archimate = "../diseno/modelo/drones-mantenimiento.archimate"
+docs_dir = "../diseno"
 reference_guide = "reference/guia_ddd.md"
 
 [output]

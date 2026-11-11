@@ -12,7 +12,7 @@ from forge import agentdefs, config, personal  # noqa: E402
 from forge.studio import projects  # noqa: E402
 
 TOOL = Path(__file__).resolve().parents[1]
-ARCHIMATE = TOOL.parent / "modelo/drones-mantenimiento.archimate"
+ARCHIMATE = TOOL.parent / "diseno/modelo/drones-mantenimiento.archimate"
 
 
 @pytest.fixture

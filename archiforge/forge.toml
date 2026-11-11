@@ -1,7 +1,7 @@
 # ArchiForge — configuración. Las decisiones de arquitectura NO van aquí: viven en decisiones/<dominio>.toml (las toma el arquitecto).
 [inputs]
-archimate = "../modelo/drones-mantenimiento.archimate"
-docs_dir = ".."
+archimate = "../diseno/modelo/drones-mantenimiento.archimate"
+docs_dir = "../diseno"
 reference_guide = "reference/guia_ddd.md"
 
 [output]

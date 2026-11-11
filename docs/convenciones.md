@@ -26,6 +26,6 @@ Asociación (línea continua) · Influencia (discontinua, punta abierta; `+` ref
 `Fuente` (pregunta P-xx y hallazgo H-xx de Fase00), `Fase`, y las propias de cada tipo (`Impacto`, `Clasificación`, `Rol`, `Meta`, `Fecha`, `Alcance`, `Externo`, `ID`, `Versión`...).
 
 ## Trabajo con el `.archimate` y los documentos
-- El modelo vive en `modelo/drones-mantenimiento.archimate` (más los parciales por fase en `modelo/por_fase/`) y las imágenes en `vistas/`; se edita por turnos para no generar conflictos.
+- El modelo vive en `diseno/modelo/drones-mantenimiento.archimate` (más los parciales por fase en `diseno/modelo/por_fase/`) y las imágenes en `diseno/vistas/`; se edita por turnos para no generar conflictos.
 - Los `.md` de `FaseNN/`, `docs/` y el `README.md` son el documento del equipo.
 - Commits: `faseX: descripción (Nombre)`; un commit = una idea. Para el modelo rige además el protocolo de turnos (`git pull` antes de empezar, `git push` al terminar) porque dos regeneraciones simultáneas entran en conflicto.
