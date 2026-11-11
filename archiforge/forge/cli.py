@@ -147,7 +147,10 @@ def _domain_status(cfg: config.Config, d: Domain) -> str:
     total = [s.id for s in build_stages(cfg.for_domain(d))]
     done = sum(1 for i in total if st.get(i, {}).get("status") == "passed")
     failed = [i for i in total if st.get(i, {}).get("status") == "failed"]
-    return ("✅ completo" if done == len(total) else f"{done}/{len(total)} etapas") + (f" · ❌ {', '.join(failed)}" if failed else "")
+    from . import cambios
+    viejo = cambios.pendiente(cfg, d, cfg.root / cfg.state_dir / d.slug)
+    aviso = {"modelo": " · ⚠ el modelo o las decisiones cambiaron: reconstruir", "justificaciones": " · ⚠ justificaciones nuevas: rehacer decisiones"}.get(viejo, "")
+    return ("✅ completo" if done == len(total) else f"{done}/{len(total)} etapas") + (f" · ❌ {', '.join(failed)}" if failed else "") + aviso
 
 
 def cmd_domains(cfg: config.Config) -> int:

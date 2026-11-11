@@ -13,6 +13,7 @@ import jinja2
 
 from . import agents, conformance, decisions, scaffold
 from . import gates as G
+from . import cambios
 from .archimate import build_ir, validate_ir
 from .config import Config, Domain
 from .manifest import build_manifest, summary
@@ -239,8 +240,33 @@ class Runner:
         hi = idx(until) if until else len(ids) - 1
         return self.stages[lo:hi + 1]
 
+    def sincronizar_insumos(self) -> None:
+        """Compara el modelo y las decisiones con los de la última construcción y reabre las etapas afectadas."""
+        try:
+            actual = cambios.huellas(self.cfg, self.domain)
+        except Exception as e:  # noqa: BLE001 — si el modelo no se puede leer, lo informa la etapa S00
+            self.log(f"  (no se pudo comparar el modelo con la construcción anterior: {type(e).__name__}: {e})")
+            return
+        previa = cambios.leer(self.fdir)
+        if previa is not None:
+            dif = cambios.diferencia(previa, actual)
+            if dif["modelo"]:
+                self.log(f"⟳ El modelo o las decisiones de «{self.domain.context}» cambiaron desde la última construcción: "
+                         f"{len(dif['agregados'])} símbolo(s) nuevo(s), {len(dif['quitados'])} quitado(s). Se reconstruyen todas las etapas.")
+                for sid in [s.id for s in self.stages if s.id in self.state]:
+                    self.state.pop(sid)
+                self.save()
+            elif dif["justificaciones"]:
+                reabiertas = [i for i in cambios.ETAPAS_DE_JUSTIFICACIONES if i in self.state]
+                self.log(f"⟳ Cambiaron las justificaciones de «{self.domain.context}»: se rehacen {', '.join(reabiertas) or 'las decisiones'}.")
+                for sid in reabiertas:
+                    self.state.pop(sid)
+                self.save()
+        cambios.guardar(self.fdir, actual)
+
     def run(self, only=None, from_=None, until=None, force=False) -> bool:
         self.ensure_repo()
+        self.sincronizar_insumos()
         if self.cfg.agent.engine == "opencode":
             agents.write_opencode_config(self.cfg.root)
         todo = self.selected(only, from_, until)
@@ -292,6 +318,7 @@ class Runner:
 
     def next_action(self) -> dict:
         """Qué debe hacer ahora el orquestador-agente. Salida pensada para leerse por Bash como JSON."""
+        self.sincronizar_insumos()
         if self.state.get("S02-scaffold", {}).get("status") != "passed" or not (self.fdir / "manifest.json").exists():
             return {"action": "bootstrap", "command": "python -m forge bootstrap"}
         failed: set[str] = set()
