@@ -144,3 +144,17 @@ def test_build_requires_domains_and_can_be_cancelled(studio):
 def test_agent_env_comes_from_the_credential_store(studio):
     studio.creds.set("ANTHROPIC_API_KEY", "sk-ant-xxxxxxxx")
     assert studio.agent_env() == {"ANTHROPIC_API_KEY": "sk-ant-xxxxxxxx"}
+
+
+def test_weak_argument_rejects_drafts_and_short_text():
+    from forge import gates
+    assert gates.weak_argument("Ejemplo: C# por tipado fuerte y soporte de DDD en el dominio.")
+    assert gates.weak_argument("corto") and gates.weak_argument("") and gates.weak_argument(None)
+    assert not gates.weak_argument("Elegimos C# por el tipado fuerte y el soporte de DDD que necesita el agregado.")
+
+
+def test_check_warns_about_draft_justifications(studio):
+    d = studio.draft("Intervenciones")
+    d.rationale = {"lenguaje": "Ejemplo: C# por tipado fuerte y soporte de DDD.", "estilo": "Elegimos microservicio porque publica y consume eventos del ciclo de la OT."}
+    _, warns = studio.check(d)
+    assert any("«lenguaje»" in w and "borrador" in w for w in warns) and not any("«estilo»" in w and "borrador" in w for w in warns)

@@ -151,7 +151,12 @@ class Studio:
         return Domain(context, "python", "hexagonal", "microservicio", "postgresql", port, patterns=pats)
 
     def check(self, d: Domain) -> tuple[list[str], list[str]]:
-        return decisions.validate(self.cfg, d)
+        from .. import gates as G
+        errors, warns = decisions.validate(self.cfg, d)
+        for k in ("lenguaje", "arquitectura", "estilo", "base_de_datos"):
+            if d.rationale.get(k) and G.weak_argument(d.rationale[k]):      # la que falta del todo ya la avisa decisions.validate
+                warns.append(f"La justificación de «{k}» es un borrador o es muy corta (mín. {G.MIN_ARGUMENT} caracteres): el ensamblado la rechaza.")
+        return errors, warns
 
     def save(self, d: Domain) -> Path:
         errors, _ = self.check(d)

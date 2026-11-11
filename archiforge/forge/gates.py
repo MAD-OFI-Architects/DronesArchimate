@@ -467,6 +467,12 @@ PLACEHOLDER = re.compile(r"^\s*(ejemplo|todo|tbd|x|n/?a|pendiente)\b", re.I)
 MIN_ARGUMENT = 30
 
 
+def weak_argument(text: str | None) -> bool:
+    """¿La justificación es un borrador («Ejemplo: …», «TODO»…) o demasiado corta para ser un argumento?"""
+    v = (text or "").strip()
+    return len(v) < MIN_ARGUMENT or bool(PLACEHOLDER.match(v))
+
+
 def portfolio_gates(cfg: Config, built: list, all_contexts: list[str]) -> list[Gate]:
     """Lo que la evaluación pide del CONJUNTO: 2 dominios reales, lenguajes distintos, arquitecturas mezcladas, argumentos
     reales (no los borradores «Ejemplo: …») y el resto de contextos simulados."""
@@ -487,7 +493,7 @@ def portfolio_gates(cfg: Config, built: list, all_contexts: list[str]) -> list[G
     for d in built:
         for k in ("lenguaje", "arquitectura", "estilo", "base_de_datos"):
             v = (d.rationale.get(k) or "").strip()
-            if len(v) < MIN_ARGUMENT or PLACEHOLDER.match(v):
+            if weak_argument(v):
                 weak.append(f"{d.context}.{k}: «{v[:40]}» no es un argumento (borrador o demasiado corto; mín. {MIN_ARGUMENT} caracteres).")
     gates.append(Gate(not weak, "evaluación: decisiones argumentadas", "\n".join(weak) or "todas las decisiones tienen justificación propia."))
     sim = cfg.out / "simulators" / "simulators.json"

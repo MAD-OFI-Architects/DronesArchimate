@@ -10,6 +10,7 @@ from textual.widgets import Button, Footer, Header, Input, Label, Select, Select
 from textual.widgets.selection_list import Selection
 
 from ...config import Domain
+from ...gates import PLACEHOLDER
 from ..service import Studio
 from .widgets import Banner
 
@@ -57,7 +58,10 @@ class DecisionScreen(Screen[bool]):
                 yield SelectionList(*[Selection(self._label(a), a["id"], bool(d.patterns.get(a["id"], {}).get("usar"))) for a in self.advice], id="patterns")
                 for key, q in WHY:
                     yield Label(q, classes="field-label")
-                    yield TextArea(d.rationale.get(key, ""), id=f"why-{key}")
+                    cur = d.rationale.get(key, "")
+                    draft = bool(PLACEHOLDER.match(cur))        # «Ejemplo: …» es una sugerencia, no un argumento: se muestra en gris
+                    yield TextArea("" if draft else cur, id=f"why-{key}",
+                                   placeholder=cur if draft else "Escribe tu argumento propio (mín. 30 caracteres)")
                 yield Banner(id="banner")
                 with Horizontal(classes="buttons"):
                     yield Button("Guardar decisiones", id="save", variant="success")
@@ -98,7 +102,8 @@ class DecisionScreen(Screen[bool]):
         chosen = set(self.query_one("#patterns", SelectionList).selected)
         patterns = {a["id"]: {**self.draft.patterns.get(a["id"], {}), "usar": a["id"] in chosen} for a in self.advice}
         why = {k: self.query_one(f"#why-{k}", TextArea).text.strip() for k, _ in WHY}
-        rationale = {**self.draft.rationale, **{k: v for k, v in why.items() if v}}
+        keep = {k: v for k, v in self.draft.rationale.items() if k not in why}     # justificaciones de patrones, etc.
+        rationale = {**keep, **{k: v for k, v in why.items() if v}}              # un campo vacío elimina el borrador
         return Domain(self.context, str(g("language")), str(g("architecture")), str(g("style")), str(g("database")), port,
                       patterns=patterns, rationale=rationale)
 

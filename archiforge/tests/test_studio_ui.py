@@ -243,3 +243,46 @@ def test_forge_studio_is_a_registered_command_and_does_not_need_forge_toml(tmp_p
     assert r.returncode == 0 and "studio" in r.stdout.lower()
     r = subprocess.run([sys.executable, "-m", "forge", "--help"], cwd=TOOL, capture_output=True, text=True)
     assert "studio" in r.stdout
+
+
+def test_draft_justifications_show_as_grey_suggestions_and_empty_fields_drop_them(env):
+    store, creds, info = env
+    (info.root / "decisiones").mkdir(exist_ok=True)
+    (info.root / "decisiones/intervenciones.toml").write_text(
+        'contexto = "Intervenciones"\nlenguaje = "csharp"\narquitectura = "clean-ddd"\nestilo = "microservicio"\nbase_de_datos = "mongodb"\npuerto = 5101\n'
+        '[patrones]\ncache = true\nmemento = true\ncifrado = true\n[justificacion]\nlenguaje = "Ejemplo: C# por tipado fuerte y soporte de DDD."\n'
+        'estilo = "Elegimos microservicio porque publica y consume eventos del ciclo de la OT."\n', encoding="utf-8")
+
+    async def go():
+        app = StudioApp(store, creds)
+        async with app.run_test(size=SIZE) as pilot:
+            await wait_for(pilot, lambda: type(app.screen).__name__ == "HomeScreen")
+            await _open_decision(app, pilot, "Intervenciones")
+            s = app.screen
+            lang, estilo = s.query_one("#why-lenguaje"), s.query_one("#why-estilo")
+            assert lang.text == "" and lang.placeholder.startswith("Ejemplo:")                 # borrador: sugerencia gris
+            assert estilo.text.startswith("Elegimos microservicio")                           # argumento real: se conserva
+            await pilot.press("ctrl+s")
+            await wait_for(pilot, lambda: type(app.screen).__name__ == "DomainsScreen")
+    run(go())
+    saved = (info.root / "decisiones/intervenciones.toml").read_text(encoding="utf-8")
+    assert "Ejemplo:" not in saved and "Elegimos microservicio" in saved
+
+
+def test_assemble_failure_for_draft_arguments_tells_where_to_fix_it(env):
+    store, creds, info = env
+
+    async def go():
+        app = StudioApp(store, creds)
+        async with app.run_test(size=SIZE) as pilot:
+            await wait_for(pilot, lambda: type(app.screen).__name__ == "HomeScreen")
+            await _open_decision(app, pilot, "Repuestos del Taller")
+            await pilot.press("ctrl+s")
+            await wait_for(pilot, lambda: type(app.screen).__name__ == "DomainsScreen")
+            await pilot.press("a")
+            await wait_for(pilot, lambda: type(app.screen).__name__ == "AssembleScreen")
+            s = app.screen
+            s.lines.append("❌ evaluación: decisiones argumentadas:")          # lo que imprime el ensamblado real
+            s.done(1)
+            assert "justificaciones reales" in banner_text(s)
+    run(go())
