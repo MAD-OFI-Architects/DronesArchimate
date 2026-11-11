@@ -40,9 +40,21 @@ def require(condition, message):
         raise RuntimeError(message)
 
 
+def respuesta(method: str, path: str, payload=None):
+    """Como call, pero devuelve (status, cuerpo) también en respuestas 4xx/5xx."""
+    try:
+        return call(method, path, payload)
+    except urllib.error.HTTPError as error:
+        texto = error.read().decode() or "{}"
+        try:
+            return error.code, json.loads(texto)
+        except ValueError:
+            return error.code, {"error": texto}
+
+
 def emitir(contexto, evento, payload):
     ruta = f"/sim/simulate/{contexto}/{evento}"
-    status, response = call("POST", ruta, payload)
+    status, response = respuesta("POST", ruta, payload)
     if status == 202:
         return response
     if status != 404:
