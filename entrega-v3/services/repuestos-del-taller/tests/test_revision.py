@@ -7,7 +7,7 @@ import types
 import uuid
 
 
-from repuestos_del_taller.adapters.inbound.http.composicion import RepuestosDelTallerComposicion, _repositorios
+from repuestos_del_taller.adapters.inbound.http.composicion import RepuestosDelTallerComposicion, _persistencia
 from repuestos_del_taller.adapters.outbound.persistencia import (
     RepositorioExistencia, RepositorioExistenciaSql, RepositorioSolicitudDeReposicion,
     RepositorioSolicitudDeReposicionSql,
@@ -26,7 +26,7 @@ from repuestos_del_taller.application.manejadores import (
 class Cliente:
     """Cliente ASGI mínimo: evita depender de httpx en el entorno hermético."""
 
-    def __init__(self, app): self.app = app
+    def __init__(self, app): self.app = app; self.ultimo = {}
 
     def post(self, ruta, json_body):
         return asyncio.run(self._llamar(ruta, json_body))
@@ -36,6 +36,8 @@ class Cliente:
         async def recibir(): return {"type": "http.request", "body": datos, "more_body": False}
         async def enviar(mensaje):
             if mensaje["type"] == "http.response.start": respuesta["status"] = mensaje["status"]
+            elif mensaje["type"] == "http.response.body": respuesta["cuerpo"] = respuesta.get("cuerpo", b"") + mensaje.get("body", b"")
+        self.ultimo = respuesta
         await self.app({"type": "http", "method": "POST", "path": ruta, "raw_path": ruta.encode(), "query_string": b"",
                         "headers": [(b"content-type", b"application/json")], "scheme": "http", "server": ("t", 80),
                         "client": ("t", 1), "http_version": "1.1", "root_path": ""}, recibir, enviar)
@@ -64,10 +66,10 @@ def test_aprobar_la_solicitud_pone_la_existencia_en_reponiendo() -> None:
     assert existencias.por_referencia("R-1").estado == "reponiendo"
 
 
-def test_cuerpo_invalido_responde_422_y_no_500() -> None:
+def test_cuerpo_invalido_responde_400_y_no_500() -> None:
     cliente = Cliente(RepuestosDelTallerComposicion().crear_app())
-    assert cliente.post("/api/existencia", {"referencia": "R-1"}) == 422
-    assert cliente.post("/api/solicitud-de-reposicion", {"referencia": "R-1", "cantidad": 1, "monto": 1, "solicitud_id": "no-uuid"}) == 422
+    assert cliente.post("/api/existencia", {"referencia": "R-1"}) == 400
+    assert cliente.post("/api/solicitud-de-reposicion", {"referencia": "R-1", "cantidad": 1, "monto": 1, "solicitud_id": "no-uuid"}) == 400
 
 
 def test_reservar_por_http_publica_el_faltante() -> None:
@@ -76,7 +78,10 @@ def test_reservar_por_http_publica_el_faltante() -> None:
         def publicar(self, topico, evento): publicados.append(topico)
     cliente = Cliente(RepuestosDelTallerComposicion(publicador=Falso()).crear_app())
     cliente.post("/api/existencia", {"referencia": "R-1", "cantidad": 1, "stock_minimo": 0, "plazo_dias": 1})
-    assert cliente.post("/api/existencia/R-1/reservar-repuesto", {"orden_trabajo_id": "OT-9", "cantidad": 5}) == 409
+    assert cliente.post("/api/existencia/R-1/reservar-repuesto", {"orden_trabajo_id": "OT-9", "cantidad": 5}) == 422
+    problema = json.loads(cliente.ultimo["cuerpo"])
+    assert (problema["regla"], problema["codigo"], problema["status"]) == ("ExistenciaInsuficiente", "EXISTENCIA_INSUFICIENTE", 422)
+    assert "insuficiente" in problema["detail"]
     assert publicados == ["repuestos-del-taller.faltante-detectado.v1"]
 
 
@@ -107,6 +112,64 @@ def test_database_url_selecciona_el_repositorio_sql(monkeypatch):
     conexion = _ConexionSqlite()
     fake = types.SimpleNamespace(connect=lambda url, autocommit: conexion if url == "postgresql://x" else None)
     monkeypatch.setitem(sys.modules, "psycopg", fake)
-    existencias, solicitudes = _repositorios("postgresql://x")
+    existencias, solicitudes, *_ = _persistencia("postgresql://x")
     assert isinstance(existencias, RepositorioExistenciaSql) and isinstance(solicitudes, RepositorioSolicitudDeReposicionSql)
-    assert isinstance(_repositorios("")[0], RepositorioExistencia)
+    assert isinstance(_persistencia("")[0], RepositorioExistencia)
+
+
+def test_outbox_e_inbox_sql_sobreviven_a_un_reinicio() -> None:
+    from repuestos_del_taller.adapters.outbound.integracion import (
+        AlmacenDeBandejaSql, BandejaDeSalida, ProcesadorDeMensajeEntrante, RegistroDeProcesadosSql,
+    )
+    from repuestos_del_taller.adapters.outbound.seguridad import CifradorAes
+    conexion = _ConexionSqlite()
+    cifrador = CifradorAes(b"clave de pruebas")
+
+    class BusCaido:
+        def publicar(self, topico, evento): raise OSError("bus caído")
+
+    class Bus:
+        def __init__(self): self.enviados = []
+        def publicar(self, topico, evento): self.enviados.append(evento["eventId"])
+
+    BandejaDeSalida(cifrador, AlmacenDeBandejaSql(conexion)).agregar("t", {"eventId": "e-1"})
+    reiniciada = BandejaDeSalida(cifrador, AlmacenDeBandejaSql(conexion))          # otro proceso, misma base
+    assert reiniciada.despachar(BusCaido()) == 0 and reiniciada.pendientes == 1    # el fallo no borra el evento
+    bus = Bus()
+    assert reiniciada.despachar(bus) == 1 and bus.enviados == ["e-1"] and reiniciada.pendientes == 0
+    BandejaDeSalida(cifrador, AlmacenDeBandejaSql(conexion)).agregar("t", {"eventId": "e-2"})
+    agotada = BandejaDeSalida(cifrador, AlmacenDeBandejaSql(conexion))
+    for _ in range(3): agotada.despachar(BusCaido(), 3)
+    assert (agotada.pendientes, agotada.fallidos) == (0, 1)                        # queda como fallido, no se pierde
+
+    vistos = []
+    assert ProcesadorDeMensajeEntrante(RegistroDeProcesadosSql(conexion)).procesar({"eventId": "x"}, vistos.append) is True
+    assert ProcesadorDeMensajeEntrante(RegistroDeProcesadosSql(conexion)).procesar({"eventId": "x"}, vistos.append) is False
+    assert len(vistos) == 1
+
+
+def test_un_consumidor_que_falla_a_medias_se_reintenta_sin_duplicar() -> None:
+    from repuestos_del_taller.adapters.outbound.integracion import ProcesadorDeMensajeEntrante
+    from repuestos_del_taller.application.integracion import OrdenDeTrabajoCerradaConsumidor
+    existencias, _, _ = _preparar()
+    RegistrarEntradaDeRepuestoManejador(existencias).manejar(RegistrarEntradaDeRepuestoComando("R-2", 5, 0, 1))
+    ReservarRepuestoManejador(existencias).manejar(ReservarRepuestoComando("R-2", "OT-1", 1))
+    llamadas = {"n": 0}
+
+    class Manejador(ConfirmarConsumoManejador):
+        def manejar(self, comando):
+            llamadas["n"] += 1
+            if llamadas["n"] == 2:
+                raise RuntimeError("caída a mitad del evento")
+            return super().manejar(comando)
+
+    consumidor = OrdenDeTrabajoCerradaConsumidor(Manejador(existencias))
+    sobre = {"eventId": "e-9", "payload": {"paradaId": "OT-1", "consumos": [{"referencia": "R-1"}, {"referencia": "R-2"}]}}
+    procesador = ProcesadorDeMensajeEntrante()
+    try:
+        procesador.procesar(sobre, consumidor.consumir)
+    except RuntimeError:
+        pass
+    assert procesador.procesar(sobre, consumidor.consumir) is True                 # no quedó marcado: se reintenta
+    assert existencias.por_referencia("R-2").fisica.valor == 4                     # R-1 ya confirmado no se duplica
+    assert procesador.procesar(sobre, consumidor.consumir) is False

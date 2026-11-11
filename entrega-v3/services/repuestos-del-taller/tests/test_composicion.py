@@ -2,7 +2,7 @@
 import sys
 import types
 
-from repuestos_del_taller.adapters.inbound.http.composicion import _repositorios
+from repuestos_del_taller.adapters.inbound.http.composicion import _persistencia
 
 
 class _ConexionVacia:
@@ -18,5 +18,5 @@ def test_database_url_estilo_sqlalchemy_se_normaliza_para_psycopg(monkeypatch) -
         return _ConexionVacia()
 
     monkeypatch.setitem(sys.modules, "psycopg", types.SimpleNamespace(connect=connect))
-    _repositorios("postgresql+psycopg://forge:forge@postgres:5432/repuestos_del_taller")
+    _persistencia("postgresql+psycopg://forge:forge@postgres:5432/repuestos_del_taller")
     assert urls == ["postgresql://forge:forge@postgres:5432/repuestos_del_taller"]

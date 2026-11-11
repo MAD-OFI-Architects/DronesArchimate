@@ -24,6 +24,9 @@ ESQUEMA = (
     "CREATE TABLE IF NOT EXISTS existencia (referencia TEXT PRIMARY KEY, memento TEXT NOT NULL)",
     "CREATE TABLE IF NOT EXISTS solicitud_de_reposicion ("
     "id TEXT PRIMARY KEY, referencia TEXT NOT NULL, estado TEXT NOT NULL, memento TEXT NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS bandeja_de_salida (id TEXT PRIMARY KEY, topico TEXT NOT NULL, carga TEXT NOT NULL, "
+    "intentos INTEGER NOT NULL DEFAULT 0, estado TEXT NOT NULL DEFAULT 'pendiente', creado TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+    "CREATE TABLE IF NOT EXISTS bandeja_de_entrada (event_id TEXT PRIMARY KEY, procesado TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)",
 )
 
 

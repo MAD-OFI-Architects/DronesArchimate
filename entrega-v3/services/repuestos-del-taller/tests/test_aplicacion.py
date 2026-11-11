@@ -154,10 +154,14 @@ def _parada(event_id, cantidad):
     return {"eventId": event_id, "payload": {"paradaId": "P-1", "tareas": [{"repuestos": [{"referencia": "R-1", "cantidad": cantidad}]}]}}
 
 
+from repuestos_del_taller.adapters.outbound.integracion import ProcesadorDeMensajeEntrante  # noqa: E402
+
+
 def test_parada_programada_reserva_y_es_idempotente(existencias):
     consumidor = ParadaProgramadaConsumidor(ReservarRepuestoManejador(existencias))
-    assert consumidor.consumir(_parada("e-1", 2)) is True
-    assert consumidor.consumir(_parada("e-1", 2)) is False
+    procesador = ProcesadorDeMensajeEntrante()
+    assert procesador.procesar(_parada("e-1", 2), consumidor.consumir) is True
+    assert procesador.procesar(_parada("e-1", 2), consumidor.consumir) is False
     assert existencias.por_referencia("R-1").reservada == 2
 
 
@@ -165,7 +169,8 @@ def test_orden_cerrada_confirma_consumo_y_es_idempotente(existencias):
     ReservarRepuestoManejador(existencias).manejar(ReservarRepuestoComando("R-1", "P-1", 2))
     consumidor = OrdenDeTrabajoCerradaConsumidor(ConfirmarConsumoManejador(existencias))
     sobre = {"eventId": "e-2", "payload": {"paradaId": "P-1", "consumos": [{"referencia": "R-1", "cantidad": 2}]}}
-    assert consumidor.consumir(sobre) is True and consumidor.consumir(sobre) is False
+    procesador = ProcesadorDeMensajeEntrante()
+    assert procesador.procesar(sobre, consumidor.consumir) is True and procesador.procesar(sobre, consumidor.consumir) is False
     assert existencias.por_referencia("R-1").fisica.valor == 2
 
 

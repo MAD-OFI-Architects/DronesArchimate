@@ -1,6 +1,7 @@
 """Endpoints HTTP y serialización de Problem Details."""
 from __future__ import annotations
 
+import re
 import uuid
 from dataclasses import asdict, is_dataclass
 from typing import Any
@@ -16,6 +17,17 @@ def _datos(obj: Any) -> dict:
     if is_dataclass(obj): return asdict(obj)
     if hasattr(obj, "crear_memento"): return asdict(obj.crear_memento())
     return {"valor": str(obj)}
+
+
+def _codigo(nombre_de_regla: str) -> str:
+    """ExistenciaInsuficiente → EXISTENCIA_INSUFICIENTE (código del contrato)."""
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", nombre_de_regla).upper()
+
+
+def _problema(estado: int, titulo: str, detalle: str, **extensiones: str) -> JSONResponse:
+    """Problem Details (RFC 9457), igual que Intervenciones; ``error`` se conserva por compatibilidad."""
+    cuerpo = {"type": "about:blank", "title": titulo, "status": estado, "detail": detalle, "error": detalle, **extensiones}
+    return JSONResponse(status_code=estado, content=cuerpo, media_type="application/problem+json")
 
 
 class RepuestosDelTallerEndpoints:
@@ -49,12 +61,15 @@ class RepuestosDelTallerEndpoints:
         async def ejecutar(nombre, construir):
             try:
                 return self._ejecutar(nombre, construir())
-            except (ErrorDeDominio, ViolacionDeReglaDeNegocio) as error:
-                return JSONResponse(status_code=409, content={"error": str(error)})
+            except ViolacionDeReglaDeNegocio as error:
+                regla = type(error.regla).__name__
+                return _problema(422, "Regla de negocio incumplida", str(error), regla=regla, codigo=_codigo(regla))
+            except ErrorDeDominio as error:
+                return _problema(400, "Dato inválido para el dominio", str(error))
             except LookupError as error:
-                return JSONResponse(status_code=404, content={"error": str(error)})
+                return _problema(404, "Recurso no encontrado", str(error), codigo=str(error))
             except (ValueError, TypeError) as error:
-                return JSONResponse(status_code=422, content={"error": str(error)})
+                return _problema(400, "Solicitud inválida", str(error))
 
         @app.post("/api/existencia")
         async def registrar(request: Request):
@@ -84,7 +99,7 @@ class RepuestosDelTallerEndpoints:
         @app.get("/api/existencia/{referencia}")
         async def obtener_existencia(referencia: str):
             existencia = self.existencias.por_referencia(referencia)
-            return _datos(existencia) if existencia else JSONResponse(status_code=404, content={"error": "REFERENCIA_INEXISTENTE"})
+            return _datos(existencia) if existencia else _problema(404, "Recurso no encontrado", "REFERENCIA_INEXISTENTE", codigo="REFERENCIA_INEXISTENTE")
 
         @app.post("/api/solicitud-de-reposicion")
         async def solicitar(request: Request):
@@ -105,12 +120,12 @@ class RepuestosDelTallerEndpoints:
                 solicitud = self.solicitudes.por_id(uuid.UUID(solicitud_id))
             except ValueError:
                 solicitud = None
-            return _datos(solicitud) if solicitud else JSONResponse(status_code=404, content={"error": "SOLICITUD_INEXISTENTE"})
+            return _datos(solicitud) if solicitud else _problema(404, "Recurso no encontrado", "SOLICITUD_INEXISTENTE", codigo="SOLICITUD_INEXISTENTE")
 
         @app.post("/events/{topic}")
         async def recibir_evento(topic: str, request: Request):
             envelope = await body(request)
             if topic not in self.consumidores:
-                return JSONResponse(status_code=404, content={"error": "TOPICO_NO_CONSUMIDO"})
+                return _problema(404, "Recurso no encontrado", "TOPICO_NO_CONSUMIDO", codigo="TOPICO_NO_CONSUMIDO")
             return self._entrada(topic, envelope)
         return app

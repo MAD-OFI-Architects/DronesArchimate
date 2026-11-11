@@ -68,12 +68,12 @@ class TestBandejaDeSalida:
         bus = Bus()
         bandeja = BandejaDeSalida(CifradorAes(b"clave de pruebas"))
         bandeja.agregar("t", {"eventId": "e-1", "x": 1})
-        assert "e-1" not in bandeja._pendientes[0][0]
+        assert "e-1" not in bandeja._almacen.pendientes()[0][1]
         assert bandeja.despachar(bus) == 1 and bus.enviados == [("t", {"eventId": "e-1", "x": 1})]
         PublicadorConBandeja(bandeja, bus).publicar("t2", {"eventId": "e-2"})
         assert bus.enviados[-1][0] == "t2"
 
-    def test_descarta_tras_agotar_reintentos(self):
+    def test_marca_fallido_tras_agotar_reintentos_sin_borrar(self):
         from repuestos_del_taller.adapters.outbound.integracion import BandejaDeSalida
 
         class BusCaido:
@@ -82,7 +82,7 @@ class TestBandejaDeSalida:
         bandeja = BandejaDeSalida(CifradorAes(b"clave de pruebas"))
         bandeja.agregar("t", {"eventId": "e-1"})
         for _ in range(3): bandeja.despachar(BusCaido(), 3)
-        assert bandeja._pendientes == []
+        assert (bandeja.pendientes, bandeja.fallidos) == (0, 1)
 
 
 def test_observador_envia_aviso_por_el_puerto_acl():

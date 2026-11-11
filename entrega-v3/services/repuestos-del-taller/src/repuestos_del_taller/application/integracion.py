@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from ..domain.existencias.eventos import StockMinimoAlcanzado
-from ..domain.compartido.errores import ViolacionDeReglaDeNegocio
+from ..domain.compartido.errores import ErrorDeDominio, ViolacionDeReglaDeNegocio
 from .comandos import (
     ConfirmarConsumoComando, ReservarRepuestoComando, SolicitarReposicionComando,
 )
@@ -15,28 +15,18 @@ from .manejadores import (
 )
 
 
-class _ConsumidorIdempotente:
-    def __init__(self) -> None:
-        self._procesados: set[str] = set()
-
-    def _una_vez(self, envelope: dict[str, Any], accion: Callable[[], None]) -> bool:
-        event_id = str(envelope.get("eventId", ""))
-        if not event_id or event_id in self._procesados:
-            return False
-        accion(); self._procesados.add(event_id); return True
-
-
-class ParadaProgramadaConsumidor(_ConsumidorIdempotente):
+class ParadaProgramadaConsumidor:
+    """Reserva idempotente por (referencia, orden): reprocesar el mismo evento no duplica reservas.
+    La deduplicación del evento vive en ProcesadorDeMensajeEntrante."""
     def __init__(self, manejador: ReservarRepuestoManejador) -> None:
-        super().__init__(); self.manejador = manejador
+        self.manejador = manejador
 
     def consumir(self, envelope: dict[str, Any]) -> bool:
         payload = envelope.get("payload", {})
-        def procesar() -> None:
-            for tarea in payload.get("tareas", []):
-                for repuesto in tarea.get("repuestos", []):
-                    self._reservar(repuesto, str(payload.get("paradaId", "")))
-        return self._una_vez(envelope, procesar)
+        for tarea in payload.get("tareas", []):
+            for repuesto in tarea.get("repuestos", []):
+                self._reservar(repuesto, str(payload.get("paradaId", "")))
+        return True
 
     def _reservar(self, repuesto: dict[str, Any], parada_id: str) -> None:
         try:
@@ -47,19 +37,22 @@ class ParadaProgramadaConsumidor(_ConsumidorIdempotente):
             pass  # el manejador ya publicó Faltante detectado; reintentar el sobre lo duplicaría
 
 
-class OrdenDeTrabajoCerradaConsumidor(_ConsumidorIdempotente):
+class OrdenDeTrabajoCerradaConsumidor:
+    """Confirma cada consumo; si un reintento encuentra uno ya confirmado (sin reserva), lo salta."""
     def __init__(self, manejador: ConfirmarConsumoManejador) -> None:
-        super().__init__(); self.manejador = manejador
+        self.manejador = manejador
 
     def consumir(self, envelope: dict[str, Any]) -> bool:
         payload = envelope.get("payload", {})
-        def procesar() -> None:
-            for consumo in payload.get("consumos", []):
+        for consumo in payload.get("consumos", []):
+            try:
                 self.manejador.manejar(ConfirmarConsumoComando(
                     referencia=consumo["referencia"],
                     orden_trabajo_id=str(payload.get("paradaId") or payload.get("ordenId", "")),
                 ))
-        return self._una_vez(envelope, procesar)
+            except ErrorDeDominio:
+                pass  # ya confirmado en un intento anterior del mismo evento
+        return True
 
 
 class StockMinimoAlcanzadoObservador:
