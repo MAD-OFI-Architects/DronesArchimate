@@ -68,8 +68,8 @@ Se verificaron Git, Python, Node/npm, Docker, Docker Compose, .NET, OpenCode y C
 Primero se consultaron recomendaciones:
 
 ```bash
-.venv/bin/python -m forge advise "Intervenciones"
-.venv/bin/python -m forge advise "Repuestos del Taller"
+.venv/bin/python -m forge patterns
+.venv/bin/python -m forge domains
 ```
 
 Las decisiones se guardaron en:
@@ -275,7 +275,7 @@ forge.claude.toml
 decisiones/intervenciones.toml
 decisiones/repuestos-del-taller.toml
 ../diseno/modelo/drones-mantenimiento.archimate
-reference/evaluacion_final.md
+docs/curso/evaluacion_final.md
 .forge/intervenciones/
 .forge/repuestos-del-taller/
 out/services/intervenciones/

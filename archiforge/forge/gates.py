@@ -462,7 +462,7 @@ def stubs_gate(cfg: Config, rel: str) -> Gate:
     return Gate(not left, f"sin esqueletos pendientes ({rel})", ("Completa y quita la marca FORGE-STUB en: " + ", ".join(left[:20])) if left else "ok")
 
 
-# ------------------------------------------------------------------ Portafolio (reglas ENTRE dominios de la evaluación)
+# ------------------------------------------------------------------ Políticas del proyecto (reglas opcionales entre dominios)
 PLACEHOLDER = re.compile(r"^\s*(ejemplo|todo|tbd|x|n/?a|pendiente)\b", re.I)
 MIN_ARGUMENT = 30
 
@@ -473,42 +473,52 @@ def weak_argument(text: str | None) -> bool:
     return len(v) < MIN_ARGUMENT or bool(PLACEHOLDER.match(v))
 
 
-def portfolio_gates(cfg: Config, built: list, all_contexts: list[str]) -> list[Gate]:
-    """Lo que la evaluación pide del CONJUNTO: 2 dominios reales, lenguajes distintos, arquitecturas mezcladas, argumentos
-    reales (no los borradores «Ejemplo: …») y el resto de contextos simulados."""
-    gates = []
-    gates.append(Gate(len(built) >= 2, "evaluación: ≥ 2 dominios completos",
-                      f"{len(built)} dominio(s) construido(s): {', '.join(d.context for d in built) or 'ninguno'}."))
-    langs: dict[str, list[str]] = {}
-    for d in built:
-        langs.setdefault(d.language, []).append(d.context)
-    dup = {l: c for l, c in langs.items() if len(c) > 1}
-    gates.append(Gate(not dup, "evaluación: cada dominio en un lenguaje distinto",
-                      ("; ".join(f"{l}: {', '.join(c)}" for l, c in dup.items()) + " comparten lenguaje.") if dup
-                      else ", ".join(f"{d.context}={d.language}" for d in built)))
-    archs = {d.architecture for d in built}
-    gates.append(Gate(len(archs) >= 2 or len(built) < 2, "evaluación: arquitecturas mezcladas (clean-ddd y hexagonal)",
-                      f"arquitecturas usadas: {', '.join(sorted(archs)) or 'ninguna'}."))
-    weak = []
-    for d in built:
-        for k in ("lenguaje", "arquitectura", "estilo", "base_de_datos"):
-            v = (d.rationale.get(k) or "").strip()
-            if weak_argument(v):
-                weak.append(f"{d.context}.{k}: «{v[:40]}» no es un argumento (borrador o demasiado corto; mín. {MIN_ARGUMENT} caracteres).")
-    gates.append(Gate(not weak, "evaluación: decisiones argumentadas", "\n".join(weak) or "todas las decisiones tienen justificación propia."))
-    sim = cfg.out / "simulators" / "simulators.json"
-    real = {d.context for d in built}
-    pending = [c for c in all_contexts if c not in real]
-    try:
-        data = json.loads(sim.read_text(encoding="utf-8"))
-        simulated = {x["context"] for x in data.get("emits", []) + data.get("apis", [])}
-    except (OSError, ValueError, KeyError):
-        data, simulated = None, set()
-    overlap = simulated & real
-    gates.append(Gate(data is not None and (not pending or bool(simulated)) and not overlap, "evaluación: dominios restantes simulados",
-                      "Falta out/simulators/simulators.json o está vacío." if data is None or (pending and not simulated)
-                      else (f"Se simula un dominio que ya es real: {', '.join(sorted(overlap))}." if overlap
-                            else f"{len(simulated)} contexto(s) simulado(s): {', '.join(sorted(simulated))}.")))
+def policy_gates(cfg: Config, built: list, all_contexts: list[str]) -> list[Gate]:
+    """Reglas del conjunto de dominios que el EQUIPO declaró en `[policy]` de forge.toml. Sin sección no hay ninguna: el producto no impone nada."""
+    pol = cfg.policy or {}
+    gates: list[Gate] = []
+    if pol.get("min_domains"):
+        n = int(pol["min_domains"])
+        gates.append(Gate(len(built) >= n, f"política: al menos {n} dominios construidos",
+                          f"{len(built)} dominio(s) construido(s): {', '.join(d.context for d in built) or 'ninguno'}."))
+    if pol.get("distinct_languages"):
+        langs: dict[str, list[str]] = {}
+        for d in built:
+            langs.setdefault(d.language, []).append(d.context)
+        dup = {l: c for l, c in langs.items() if len(c) > 1}
+        gates.append(Gate(not dup, "política: cada dominio con un lenguaje distinto",
+                          ("; ".join(f"{l}: {', '.join(c)}" for l, c in dup.items()) + " comparten lenguaje.") if dup
+                          else ", ".join(f"{d.context}={d.language}" for d in built)))
+    if pol.get("mixed_architectures"):
+        archs = {d.architecture for d in built}
+        gates.append(Gate(len(archs) >= 2 or len(built) < 2, "política: arquitecturas internas distintas entre dominios",
+                          f"arquitecturas usadas: {', '.join(sorted(archs)) or 'ninguna'}."))
+    req = [p for p in pol.get("required_patterns", [])]
+    if req:
+        miss = [f"{d.context} no usa «{p}»." for d in built for p in req if not d.uses(p)]
+        gates.append(Gate(not miss, f"política: patrones obligatorios ({', '.join(req)})", "\n".join(miss) or "todos los dominios usan los patrones obligatorios."))
+    if pol.get("require_justifications"):
+        weak = []
+        for d in built:
+            for k in ("lenguaje", "arquitectura", "estilo", "base_de_datos"):
+                v = (d.rationale.get(k) or "").strip()
+                if weak_argument(v):
+                    weak.append(f"{d.context}.{k}: «{v[:40]}» no es una justificación (borrador o demasiado corta; mín. {MIN_ARGUMENT} caracteres).")
+        gates.append(Gate(not weak, "política: decisiones justificadas", "\n".join(weak) or "todas las decisiones tienen justificación propia."))
+    if pol.get("simulate_remaining"):
+        sim = cfg.out / "simulators" / "simulators.json"
+        real = {d.context for d in built}
+        pending = [c for c in all_contexts if c not in real]
+        try:
+            data = json.loads(sim.read_text(encoding="utf-8"))
+            simulated = {x["context"] for x in data.get("emits", []) + data.get("apis", [])}
+        except (OSError, ValueError, KeyError):
+            data, simulated = None, set()
+        overlap = simulated & real
+        gates.append(Gate(data is not None and (not pending or bool(simulated)) and not overlap, "política: contextos restantes simulados",
+                          "Falta out/simulators/simulators.json o está vacío." if data is None or (pending and not simulated)
+                          else (f"Se simula un contexto que ya es real: {', '.join(sorted(overlap))}." if overlap
+                                else f"{len(simulated)} contexto(s) simulado(s): {', '.join(sorted(simulated))}.")))
     return gates
 
 

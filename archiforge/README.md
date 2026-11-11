@@ -13,7 +13,7 @@ archiforge/
 ├── catalog/              catálogo de patrones
 ├── decisiones/           decisiones de arquitectura de los dos dominios
 ├── config/               contratos de payload de eventos
-├── reference/            guía DDD y material de la evaluación
+├── reference/            guía de referencia DDD
 ├── (el diseño ArchiMate vive en ../diseno/modelo y ../diseno/Fase0N: una sola copia, sin duplicar)
 ├── tests/                pruebas del generador
 ├── forge.toml            configuración OpenCode
@@ -40,7 +40,7 @@ python3 -m venv .venv
 ## Implementar un contexto que hoy está simulado
 
 ```bash
-.venv/bin/python -m forge advise "Flota y Componentes"
+.venv/bin/python -m forge patterns
 # decidir lenguaje, arquitectura, estilo, BD y patrones
 .venv/bin/python -m forge build "Flota y Componentes"
 ```

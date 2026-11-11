@@ -1,7 +1,7 @@
 """CLI de ArchiForge.
 
-Flujo del arquitecto:   advise → decide → build → (en paralelo, en otras máquinas) → assemble → publish
-  python -m forge advise "Intervenciones"                      # qué patrones recomienda el modelo y por qué
+Flujo del arquitecto:   decide → build → (en paralelo, en otras máquinas) → assemble → publish
+  python -m forge patterns                                     # catálogo de patrones disponibles (referencia)
   python -m forge decide "Intervenciones" --lang java --arch hexagonal --style microservicio --db postgresql --patterns cqrs,memento,cache,cifrado
   python -m forge build  "Intervenciones"                      # ejecuta TODO el dominio hasta terminar y verificar
   python -m forge assemble                                     # une los dominios construidos y corre el humo completo
@@ -19,7 +19,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from . import advisor, agentdefs, config, decisions
+from . import agentdefs, config, decisions
 from . import gates as G
 from .archimate import build_ir
 from .config import Domain
@@ -230,6 +230,22 @@ def cmd_build(cfg: config.Config, a, argv0: list[str]) -> int:
     return 0 if not any(codes) else 1
 
 
+def cmd_patterns(cfg: config.Config, pid: str | None) -> int:
+    cat = decisions.catalog(cfg.tool_root)
+    if pid:
+        if pid not in cat:
+            raise SystemExit(f"Patrón «{pid}» desconocido. Disponibles: {', '.join(cat)}.")
+        p = cat[pid]
+        print(f"{p['nombre']}  ({pid} · {p.get('categoria', '')})\n\nQué es:     {p['que_es']}\nSe usa cuando:     {p['cuando_si']}\nNo se usa cuando:  {p['cuando_no']}\nCosto:      {p['costo']}")
+        if p.get("requiere"):
+            print(f"Requiere:   {', '.join(p['requiere'])}")
+        return 0
+    print(f"{'id':16} {'categoría':13} patrón")
+    for k, p in cat.items():
+        print(f"{k:16} {p.get('categoria', ''):13} {p['nombre']}")
+    return 0
+
+
 def cmd_assemble(cfg: config.Config, a) -> int:
     from . import scaffold
     from .manifest import build_manifest
@@ -247,8 +263,7 @@ def cmd_assemble(cfg: config.Config, a) -> int:
     if "smoke" not in cfg.raw.get("quality", {}).get("skip", []):
         results.append(G.smoke_assembled_gate(cfg2, built))
     results += G.interconnect_gates(cfg2, ir, built)
-    if cfg.raw.get("quality", {}).get("enforce_evaluation", True):
-        results += G.portfolio_gates(cfg2, built, [c["name"] for c in ir["contexts"]])
+    results += G.policy_gates(cfg2, built, [c["name"] for c in ir["contexts"]])
     fallos = []
     for g in results:
         if g.ok:
@@ -286,15 +301,15 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("studio", help="abre la TUI (ArchiForge Studio): proyectos, decisiones, agente y tokens, construir y ensamblar")
     sub.add_parser("doctor", help="verifica herramientas e insumos")
     sub.add_parser("domains", help="contextos del ArchiMate, cuáles están decididos y cómo va cada uno")
-    ad = sub.add_parser("advise", help="recomienda patrones para un dominio según el modelo (NO decide)")
-    ad.add_argument("name"); ad.add_argument("--json", action="store_true")
+    pt = sub.add_parser("patterns", help="catálogo de patrones disponibles; con un id muestra su ficha")
+    pt.add_argument("id", nargs="?")
     de = sub.add_parser("decide", help="registra las decisiones del arquitecto para un dominio (decisiones/<dominio>.toml)")
     de.add_argument("name")
     de.add_argument("--lang", choices=list(config.LANGUAGES)); de.add_argument("--arch", choices=list(decisions.ARCHITECTURES))
     de.add_argument("--style", choices=list(decisions.STYLES)); de.add_argument("--db", choices=list(decisions.DATABASES)); de.add_argument("--port", type=int)
     de.add_argument("--patterns", help="lista separada por comas; «!x» descarta x. Ej.: cqrs,memento,cache,!state")
     de.add_argument("--why", action="append", metavar="CLAVE=TEXTO", help="justificación (lenguaje, base_de_datos, arquitectura, estilo o un patrón)")
-    ck = sub.add_parser("check", help="valida las decisiones de un dominio y avisa de lo que la evaluación pide")
+    ck = sub.add_parser("check", help="valida las decisiones de un dominio")
     ck.add_argument("name")
     b = sub.add_parser("build", help="construye uno o varios dominios hasta terminar y verificar (reintenta y reanuda solo)")
     b.add_argument("names", nargs="+"); b.add_argument("--jobs", type=int, default=0, help="dominios en paralelo (0 = todos a la vez)")
@@ -339,12 +354,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if doctor(cfg, [_need_domain(cfg, a.domain)] if a.domain else None) else 1
     if a.cmd == "domains":
         return cmd_domains(cfg)
-    if a.cmd == "advise":
-        ctx = _context(cfg, a.name)
-        ir, cat = build_ir(cfg.archimate, cfg.docs_dir), decisions.catalog(cfg.tool_root)
-        print(json.dumps({"facts": advisor.facts(ir, ctx), "patrones": advisor.advise(ir, ctx, cat)}, ensure_ascii=False, indent=2)
-              if a.json else advisor.render(ir, ctx, cat))
-        return 0
+    if a.cmd == "patterns":
+        return cmd_patterns(cfg, a.id)
     if a.cmd == "decide":
         return cmd_decide(cfg, a)
     if a.cmd == "check":

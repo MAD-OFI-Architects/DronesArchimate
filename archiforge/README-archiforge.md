@@ -1,7 +1,7 @@
 # ArchiForge — del ArchiMate al software, con el arquitecto decidiendo
 
 Tú eres el arquitecto: **decides** lenguaje, base de datos, arquitectura interna, estilo de servicio y patrones.
-ArchiForge **aconseja** (según el modelo ArchiMate) y **ejecuta con fidelidad a tus decisiones**, verificándolas con puertas automáticas.
+Tú eliges todo (lenguaje, arquitectura, base de datos, estilo y patrones) y ArchiForge **ejecuta con fidelidad a tus decisiones**, verificándolas con puertas automáticas.
 
 ## ArchiForge Studio (TUI) — la forma cómoda
 ```
@@ -12,7 +12,7 @@ uv pip install --python .venv/bin/python -r requirements.txt
 (Un solo entorno `.venv` sirve para el CLI, las pruebas y la TUI. En Arch no uses `pip` global: el Python del sistema es «externally managed». Sin `uv`: `python -m venv .venv && .venv/bin/pip install -r requirements.txt`.
 Si copias comandos a zsh, quita los comentarios `#` de la misma línea: zsh interactivo no los acepta.)
 Sin escribir archivos de configuración: **Nuevo proyecto** (eliges tu `.archimate` y la TUI te dice al instante qué entiende de él),
-**Dominios** (decides lenguaje, arquitectura, BD y patrones con las recomendaciones al lado), **Agente y tokens** (motor `opencode`/`claude`/propio,
+**Dominios** (eliges lenguaje, arquitectura, BD y patrones; al lado solo hay referencia), **Agente y tokens** (motor `opencode`/`claude`/propio,
 modelo y tokens de API), **Construir** (progreso por etapa y log en vivo) y **Ensamblar**. Teclas: `n` nuevo · `Enter` abrir/decidir · `b` construir ·
 `a` ensamblar · `g` agente y tokens · `Esc` volver · `Ctrl+Q` salir.
 - Los tokens se guardan en `~/.config/archiforge/credentials.json` (permisos 600), **fuera del proyecto y de git**, y llegan al agente solo por variables de entorno.
@@ -22,14 +22,14 @@ modelo y tokens de API), **Construir** (progreso por etapa y log en vivo) y **En
 
 ## Flujo por comandos (3 pasos por dominio)
 1. **Diseñar** (conversación con el agente): en Claude Code `/forge-design "Intervenciones"`; en OpenCode igual.
-   El agente corre `forge advise`, te explica qué patrones conviene usar (y cuáles no, para no sobreingenierizar), te pregunta y guarda `decisiones/<dominio>.toml`.
-   Sin agente: `python -m forge advise "X"` y luego `python -m forge decide "X" --lang java --arch hexagonal --style soa --db postgresql --patterns cqrs,memento,!state --why lenguaje="…"`. También puedes editar el TOML a mano.
+   El agente te pregunta cada decisión sin opinar (el catálogo se ve con `forge patterns`) y guarda `decisiones/<dominio>.toml`.
+   Sin agente: `python -m forge patterns` y `python -m forge decide "X" --lang java --arch hexagonal --style soa --db postgresql --patterns cqrs,memento,!state --why lenguaje="…"`. También puedes editar el TOML a mano.
 2. **Construir**: `/forge "Intervenciones"` (modo agente nativo) o `python -m forge build "Intervenciones"` (el pipeline lanza al agente). No para hasta terminar y verificar; reintenta y reanuda solo.
 3. **Ensamblar**: `python -m forge assemble` une los dominios construidos (compose, gateway, shell de microfrontends) y corre el humo completo.
 
 Opciones: lenguaje `csharp|python|java` · arquitectura `clean-ddd|hexagonal` · estilo `microservicio|soa|monolito-modular` · BD `mongodb|postgresql` ·
 patrones del catálogo `catalog/patrones.toml` (cqrs, pipeline, memento, state, specification, outbox, eventos, acl, cache, cifrado).
-Lo que la evaluación exige (caché, memento, cifrado) es **obligatorio** por defecto (`[quality] enforce_evaluation = false` lo rebaja a aviso).
+Las reglas del conjunto de dominios son **opcionales** y las declara el equipo en la sección `[policy]` de `forge.toml` (mínimo de dominios, lenguajes distintos, arquitecturas distintas, patrones obligatorios, justificaciones, contextos restantes simulados). Sin esa sección no se exige nada.
 
 ## En paralelo / varias personas
 Cada dominio tiene su estado (`.forge/<dominio>/`), su plataforma de humo aislada y commits acotados a sus carpetas. Dos formas:

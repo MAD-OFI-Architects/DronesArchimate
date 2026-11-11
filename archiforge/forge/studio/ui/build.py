@@ -198,8 +198,8 @@ class AssembleScreen(Screen):
     def done(self, code: int) -> None:
         self.running = False
         self.query_one("#run", Button).disabled = False
-        hint = ("Falta escribir justificaciones reales (hoy son borradores «Ejemplo: …»). Vuelve a Dominios, pulsa Enter sobre el dominio "
-                "y responde los «¿Por qué…?»; luego ensambla otra vez." if any("decisiones argumentadas" in l for l in self.lines) else "")
+        hint = ("La política del proyecto pide justificar cada decisión y hay borradores o textos muy cortos. Vuelve a Dominios, pulsa Enter sobre el dominio "
+                "y responde los «¿Por qué…?»; luego ensambla otra vez." if any("decisiones justificadas" in l for l in self.lines) else "")
         self.query_one(Banner).show("ok" if code == 0 else "error",
                                     "Ensamblado y verificado. Levanta todo con: docker compose up --build" if code == 0
                                     else "El ensamblado tiene fallos; revisa el log." + (f"\n{hint}" if hint else ""))

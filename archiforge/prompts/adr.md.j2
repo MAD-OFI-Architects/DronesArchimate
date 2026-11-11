@@ -1,7 +1,7 @@
 {% include '_common.md.j2' %}
 
 ## Tarea
-Redacta `out/docs/{{ d.slug }}/decisiones-arquitectura.md`: el documento que **argumenta** las decisiones del arquitecto para **{{ d.context }}**. Es entregable de la evaluación: concreto, breve y justificado con el modelo (cita agregados, comandos, eventos y relaciones reales del IR). **No decides nada tú**: documentas y argumentas lo que el arquitecto decidió (sección «Decisiones del arquitecto»), usando sus justificaciones como base y completándolas con evidencia del modelo. Si alguna justificación falta, redáctala con criterio y márcala «(propuesta del asistente, a confirmar)».
+Redacta `out/docs/{{ d.slug }}/decisiones-arquitectura.md`: el documento que **argumenta** las decisiones del arquitecto para **{{ d.context }}**. Es la documentación de decisiones del servicio: concreta, breve y justificado con el modelo (cita agregados, comandos, eventos y relaciones reales del IR). **No decides nada tú**: documentas y argumentas lo que el arquitecto decidió (sección «Decisiones del arquitecto»), usando sus justificaciones como base y completándolas con evidencia del modelo. Si alguna justificación falta, redáctala con criterio y márcala «(propuesta del asistente, a confirmar)».
 
 Secciones, en este orden:
 1. **Arquitectura** — {{ d.architecture }} y por qué encaja con la complejidad de este contexto ({{ info.aggregates | join(', ') }}; {{ info.commands | length }} comandos; clasificación en el modelo: {{ ctx.classification }}). Qué se mezcla con los otros dominios y por qué.

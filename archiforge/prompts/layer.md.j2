@@ -5,7 +5,7 @@
 ## Contexto
 Servicio **{{ d.context }}** ({{ d.language }}, {{ d.architecture }}, {{ d.style }}, BD {{ d.database }}) en `out/services/{{ d.slug }}/`. Estructura:
 {{ layout(d) }}
-Sigue los roles y sufijos de la guía del profesor (`reference/guia_ddd.md`): `…Comando`, `…Manejador`, `…Validador`{% if d.uses('cqrs') %}, `…Consulta`, `…Dto`, `…Mapeador`{% endif %}{% if d.uses('eventos') %}, `…Traductor`, `…Consumidor`, `…V1`{% endif %}. {% if d.architecture == 'clean-ddd' %}El shared kernel (`BuildingBlocks`/`shared`) ya existe y compila: **no lo modifiques** salvo un bug real (añade su prueba).{% else %}Arquitectura **hexagonal**: el núcleo (dominio + aplicación) define **puertos**; los adaptadores los implementan y dependen hacia adentro.{% endif %}
+Sigue los roles y sufijos de la guía de referencia (`reference/guia_ddd.md`): `…Comando`, `…Manejador`, `…Validador`{% if d.uses('cqrs') %}, `…Consulta`, `…Dto`, `…Mapeador`{% endif %}{% if d.uses('eventos') %}, `…Traductor`, `…Consumidor`, `…V1`{% endif %}. {% if d.architecture == 'clean-ddd' %}El shared kernel (`BuildingBlocks`/`shared`) ya existe y compila: **no lo modifiques** salvo un bug real (añade su prueba).{% else %}Arquitectura **hexagonal**: el núcleo (dominio + aplicación) define **puertos**; los adaptadores los implementan y dependen hacia adentro.{% endif %}
 
 ## Símbolos exigidos en esta etapa (nombres exactos, en la capa indicada)
 {{ items_table(items) }}

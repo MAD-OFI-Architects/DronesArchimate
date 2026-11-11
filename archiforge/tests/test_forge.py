@@ -10,7 +10,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from forge import advisor, agentdefs, agents, config, conformance, decisions, gates as G  # noqa: E402
+from forge import agentdefs, agents, config, conformance, decisions, gates as G  # noqa: E402
 from forge.archimate import build_ir, validate_ir  # noqa: E402
 from forge.config import AgentCfg, Domain  # noqa: E402
 from forge.manifest import build_manifest  # noqa: E402
@@ -79,11 +79,18 @@ def test_frontend_one_remote_per_domain(ir):
     assert all(r["roles"] for r in m["frontend"]["remotes"])
 
 
-def test_advisor_recommends_but_defaults_to_not_needed(ir):
+def test_context_info_reports_facts_without_any_verdict(ir):
+    from forge import contextinfo
+    f = contextinfo.facts(ir, "Repuestos del Taller")
+    assert f["aggregates"] and f["commands"] and "published" in f and "consumed" in f
+    assert not hasattr(contextinfo, "advise") and not hasattr(contextinfo, "R")      # nada de recomendaciones
+
+
+def test_catalog_is_neutral_reference_without_evaluation_flags():
     cat = decisions.catalog(ROOT)
-    adv = advisor.advise(ir, "Repuestos del Taller", cat)
-    assert {a["id"] for a in adv} >= {"cqrs", "memento", "cache", "cifrado"}
-    assert any(a["recomendacion"] == "no necesario" for a in adv) and any(a["recomendacion"] == "recomendado" for a in adv)
+    assert cat and not any("evaluacion" in v for v in cat.values())
+    text = (ROOT / "catalog" / "patrones.toml").read_text(encoding="utf-8").lower()
+    assert not any(w in text for w in ("evaluaci", "rúbrica", "profesor", "recomend"))
 
 
 def test_decisions_roundtrip_and_validation(tmp_path):
@@ -93,11 +100,12 @@ def test_decisions_roundtrip_and_validation(tmp_path):
     assert any("cqrs" in e for e in errors)
     d.patterns = {"cqrs": {"usar": True}, "pipeline": {"usar": True}, "cache": {"usar": False}}
     d.rationale = {"lenguaje": "x"}
-    errors, warns = decisions.validate(c, d)      # la evaluación EXIGE caché, memento y cifrado: omitirlos es un error
-    assert any("caché" in e.lower() for e in errors) and any("memento" in e.lower() for e in errors)
-    relaxed = dataclasses.replace(c, raw={**c.raw, "quality": {**c.raw.get("quality", {}), "enforce_evaluation": False}})
-    errors, warns = decisions.validate(relaxed, d)    # opt-out explícito: vuelve a ser aviso
-    assert not errors and any("caché" in w.lower() for w in warns)
+    errors, warns = decisions.validate(c, d)                                   # sin [policy]: nada se exige, ni siquiera la caché
+    assert not errors and not warns
+    strict = dataclasses.replace(c, policy={"required_patterns": ["memento", "cache"], "require_justifications": True})
+    errors, warns = decisions.validate(strict, d)                              # con política del proyecto: se exige lo que ella dice
+    assert any("caché" in e.lower() and "política" in e.lower() for e in errors) and any("memento" in e.lower() for e in errors)
+    assert any("arquitectura" in w for w in warns)
     p = decisions.write(c, d)
     back = decisions.read(p)
     assert (back.language, back.architecture, back.style, back.database) == ("python", "hexagonal", "microservicio", "postgresql")
@@ -197,7 +205,9 @@ def test_agentdefs_install(tmp_path):
     files = {p.relative_to(tmp_path).as_posix() for p in agentdefs.install(tmp_path, model="opencode/deepseek-v4.1-flash-free")}
     assert {".claude/agents/forge-java.md", ".claude/commands/forge.md", ".claude/commands/forge-design.md",
             ".opencode/agents/forge-orchestrator.md", ".opencode/commands/forge-design.md"} <= files
-    assert "nunca elijas" in (tmp_path / ".claude/commands/forge-design.md").read_text(encoding="utf-8").lower()
+    design = (tmp_path / ".claude/commands/forge-design.md").read_text(encoding="utf-8").lower()
+    assert "decide todo" in design and "no sugieras" in design and "forge patterns" in design        # el asistente solo pregunta y registra
+    assert "advise" not in design and "evaluaci" not in design
     orch = (tmp_path / ".opencode/agents/forge-orchestrator.md").read_text(encoding="utf-8")
     sub = (tmp_path / ".opencode/agents/forge-python.md").read_text(encoding="utf-8")
     assert "\npermission:" not in orch and "\npermissions:" in orch      # V1 no; V2 sí
@@ -229,7 +239,7 @@ def test_dryrun_end_to_end_with_fake_agent(tmp_path):
     assert ratio >= 0.9
 
 
-# ------------------------------------------------------------------ SOLID y portafolio (reglas de la evaluación)
+# ------------------------------------------------------------------ SOLID y políticas del proyecto
 def _write(root, rel, text):
     f = root / rel
     f.parent.mkdir(parents=True, exist_ok=True)
@@ -270,21 +280,26 @@ def test_build_gates_include_solid_and_java_wiring():
     assert "solid_gate" in src and "wiring_gate" in src and '"infrastructure" in layers' in src   # cableado: solo en la etapa de adaptadores
 
 
-def test_portfolio_requires_distinct_languages_mixed_architectures_and_real_arguments(tmp_path):
-    cfg = dataclasses.replace(config.load(ROOT / "forge.toml"), out=tmp_path)
-    why = {k: "Argumento propio y suficientemente largo para la evaluación." for k in ("lenguaje", "arquitectura", "estilo", "base_de_datos")}
-    a = dom("A", "python", "hexagonal"); b = dom("B", "python", "hexagonal")
+def test_policy_gates_apply_only_what_the_project_declares(tmp_path):
+    cfg = dataclasses.replace(config.load(ROOT / "forge.toml"), out=tmp_path, policy={})
+    a, b = dom("A", "python", "hexagonal"), dom("B", "python", "hexagonal")
+    assert G.policy_gates(cfg, [a, b], ["A", "B", "C"]) == []                  # sin política no hay reglas: es el usuario quien decide
+    cfg.policy = {"min_domains": 2, "distinct_languages": True, "mixed_architectures": True, "require_justifications": True,
+                  "simulate_remaining": True, "required_patterns": ["cache"]}
+    why = {k: "Argumento propio y suficientemente largo para el documento." for k in ("lenguaje", "arquitectura", "estilo", "base_de_datos")}
     a.rationale = b.rationale = why
-    res = {g.name: g for g in G.portfolio_gates(cfg, [a, b], ["A", "B", "C"])}
-    assert not res["evaluación: cada dominio en un lenguaje distinto"].ok
-    assert not res["evaluación: arquitecturas mezcladas (clean-ddd y hexagonal)"].ok
-    assert not res["evaluación: dominios restantes simulados"].ok            # no hay simulators.json
-    b = dom("B", "csharp", "clean-ddd"); b.rationale = dict(why, lenguaje="Ejemplo: C# por tipado fuerte y soporte de DDD.")
-    res = {g.name: g for g in G.portfolio_gates(cfg, [a, b], ["A", "B"])}
-    assert res["evaluación: cada dominio en un lenguaje distinto"].ok and res["evaluación: arquitecturas mezcladas (clean-ddd y hexagonal)"].ok
-    assert not res["evaluación: decisiones argumentadas"].ok
-    assert res["evaluación: ≥ 2 dominios completos"].ok
-
+    res = {g.name: g for g in G.policy_gates(cfg, [a, b], ["A", "B", "C"])}
+    assert not any("evaluaci" in n.lower() for n in res)
+    assert not res["política: cada dominio con un lenguaje distinto"].ok
+    assert not res["política: arquitecturas internas distintas entre dominios"].ok
+    assert not res["política: contextos restantes simulados"].ok                # no hay simulators.json
+    b = dom("B", "csharp", "clean-ddd")
+    b.rationale = dict(why, lenguaje="Ejemplo: C# por tipado fuerte y soporte de DDD.")
+    b.patterns["cache"] = {"usar": False}
+    res = {g.name: g for g in G.policy_gates(cfg, [a, b], ["A", "B"])}
+    assert res["política: cada dominio con un lenguaje distinto"].ok and res["política: arquitecturas internas distintas entre dominios"].ok
+    assert not res["política: decisiones justificadas"].ok and not res["política: patrones obligatorios (cache)"].ok
+    assert res["política: al menos 2 dominios construidos"].ok
 
 def test_scaffolded_frontend_ships_a_design_system_and_passes_the_design_gate(tmp_path):
     from forge import scaffold

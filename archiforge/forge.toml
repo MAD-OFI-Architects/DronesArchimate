@@ -12,7 +12,7 @@ dir = "out"
 dir = "decisiones"
 
 [quality]
-min_conformance = 0.9     # la evaluación exige >= 90 % de coincidencia con el diseño
+min_conformance = 0.9     # conformidad mínima (0 a 1) entre el código generado y el modelo ArchiMate
 strict_tools = true       # si falta una herramienta necesaria, `forge build` no arranca (forge doctor)
 skip = []                 # etapas opcionales a omitir: "smoke" (docker) | "frontend"
 
@@ -22,3 +22,11 @@ model = "github-copilot/auto"
 opencode_agent = "forge-orchestrator"   # agente por defecto; el pipeline usa el forge-* de cada etapa
 max_attempts = 3
 timeout_minutes = 90
+
+[policy]   # reglas del EQUIPO para el conjunto de dominios (opcional: sin esta sección no se exige nada; bórrala para quitarlas todas)
+min_domains = 2
+distinct_languages = true
+mixed_architectures = true
+required_patterns = ["memento", "cache", "cifrado"]
+require_justifications = true
+simulate_remaining = true

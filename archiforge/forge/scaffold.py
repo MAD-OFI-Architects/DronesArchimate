@@ -548,7 +548,7 @@ COPY --from=build /app/mfe-shell/dist /usr/share/nginx/html
 # ----------------------------------------------------------------------------- instrucciones de proyecto
 SERVICE_AGENTS_MD = """# Servicio «{context}» ({language} · {architecture} · {style} · {database})
 
-Generado a partir del modelo ArchiMate (evaluación final de Arquitectura de Software, versión 3) según las decisiones del arquitecto
+Generado a partir del modelo ArchiMate según las decisiones del arquitecto
 (`docs/{slug}/decisiones.toml`). Patrones elegidos: {patterns}.
 
 - Contratos de integración: ver el contrato del bus del ensamblado (`docs/contrato-bus.md`) y `docs/{slug}/`.

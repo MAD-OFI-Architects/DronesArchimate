@@ -15,7 +15,7 @@ from .widgets import Banner, PathPicker
 LOGO = Text.from_markup("[b #7aa2f7]◆  A R C H I F O R G E[/]  [#7dcfff]Studio[/]")
 STEPS = (
     "[b]1  Proyecto[/] · elige tu .archimate\n"
-    "[b]2  Decisiones[/] · lenguaje, arquitectura, BD y patrones por dominio; la herramienta aconseja, tú decides\n"
+    "[b]2  Decisiones[/] · lenguaje, arquitectura, BD y patrones por dominio: tú eliges todo\n"
     "[b]3  Agente[/] · motor, modelo y tokens de API\n"
     "[b]4  Construir[/] · etapas con puertas de calidad en vivo\n"
     "[b]5  Ensamblar[/] · compose, gateway y microfrontends\n\n"

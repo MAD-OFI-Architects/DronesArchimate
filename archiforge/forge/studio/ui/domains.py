@@ -1,4 +1,4 @@
-"""Panel del proyecto: los dominios del modelo, su estado y lo que la evaluación pide del conjunto."""
+"""Panel del proyecto: los dominios del modelo, su estado y las políticas del equipo (si el proyecto declara alguna)."""
 from __future__ import annotations
 
 from rich.text import Text
@@ -36,7 +36,7 @@ class DomainsScreen(Screen):
                     yield DataTable(id="table", cursor_type="row", zebra_stripes=True)
                     yield Banner(id="banner")
                 with Vertical(classes="card", id="portfolio"):
-                    yield Static("Lo que la evaluación pide del conjunto", classes="card-title")
+                    yield Static("Políticas del proyecto", classes="card-title")
                     yield Static("…", id="rules")
             with Vertical(id="right", classes="card"):
                 yield Static("Detalle", classes="card-title")
@@ -62,7 +62,7 @@ class DomainsScreen(Screen):
                 self.studio = Studio(self.app.store.load(self.info), self.app.creds)
             else:
                 self.studio.reload()
-            rows, rules = self.studio.rows(), self.studio.portfolio_findings()
+            rows, rules = self.studio.rows(), self.studio.policy_findings()
         except Exception as e:  # noqa: BLE001 — se muestra, no se cae la TUI
             self.app.call_from_thread(self.query_one(Banner).show, "error", f"No se pudo cargar el proyecto: {e}")
             return
@@ -92,6 +92,7 @@ class DomainsScreen(Screen):
             ok = line.startswith("✓")
             txt.append(line + "\n", style="#9ece6a" if ok else "#f7768e")
         self.query_one("#rules", Static).update(txt)
+        self.query_one("#portfolio").display = bool(rules)         # sin políticas declaradas, el panel no existe
         self.query_one(Banner).clear()
         if not any(r.decided for r in rows):
             self.query_one(Banner).show("info", "Elige un dominio y pulsa [b]Enter[/b] para tomar sus decisiones. Los demás se simulan.")
@@ -115,9 +116,7 @@ class DomainsScreen(Screen):
                   f"  Patrones: {', '.join(k for k, v in d.patterns.items() if v.get('usar')) or '—'}", ""]
             L.append("[dim]Enter para editar sus decisiones[/]")
         else:
-            rec = [a["id"] for a in self.studio.advice(r.context) if a["recomendacion"] == "recomendado"]
-            L += ["[b $warning]Sin decidir (se simula)[/]", f"  La herramienta recomienda: {', '.join(rec) or 'nada especial'}", "",
-                  "[dim]Enter para decidir y construir este dominio[/]"]
+            L += ["[b $warning]Sin decidir (se simula)[/]", "", "[dim]Enter para decidir y construir este dominio[/]"]
         self.query_one("#detail-text", Static).update("\n".join(L))
 
     # ---- acciones

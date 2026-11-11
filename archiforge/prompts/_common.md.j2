@@ -9,8 +9,8 @@ decide con criterio y deja constancia en `out/docs/{{ d.slug }}/supuestos.md`.
 - Raíz de trabajo: la carpeta actual. **El producto vive en `out/`** (su propio repositorio git; NO ejecutes `git commit`: lo hace el orquestador).
 - Escribe **solo** dentro de: {{ scope | join(', ') }}. No toques nada más.
 - Consulta (solo lectura): `{{ state_dir }}/ir.json` (modelo ArchiMate ya extraído: contextos, agregados, comandos, eventos,
-  políticas, contratos, lenguaje ubicuo), `{{ state_dir }}/manifest.json` (símbolos exigidos), `reference/evaluacion_final.md`
-  (requisitos del curso), `reference/guia_ddd.md` (plantilla del profesor), `out/docs/{{ d.slug }}/decisiones-arquitectura.md` (decisiones tomadas).
+  políticas, contratos, lenguaje ubicuo), `{{ state_dir }}/manifest.json` (símbolos exigidos),
+  `reference/guia_ddd.md` (guía de referencia DDD), `out/docs/{{ d.slug }}/decisiones-arquitectura.md` (decisiones tomadas).
 - **No leas el `.archimate` crudo** (1,3 MB): usa el IR (`python -c` o `jq` para consultar).
 
 ## Reglas de oro

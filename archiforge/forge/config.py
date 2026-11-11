@@ -72,6 +72,7 @@ class Config:
     repo: str = ""                    # URL del repositorio del producto (se clona en out/ si no existe)
     decisions_dir: Path = Path("decisiones")
     raw: dict = field(default_factory=dict)
+    policy: dict = field(default_factory=dict)     # [policy] de forge.toml: reglas opcionales del equipo (sin sección, no se exige nada)
     tool_root: Path = TOOL_ROOT       # raíz de la HERRAMIENTA; distinta de `root` cuando el proyecto vive aparte (TUI)
 
     def for_domain(self, d: Domain) -> "Config":
@@ -107,6 +108,7 @@ def load(path: Path) -> Config:
         repo=out.get("repo", ""),
         decisions_dir=root / raw.get("decisions", {}).get("dir", "decisiones"),
         raw=raw,
+        policy=dict(raw.get("policy", {})),
     )
     cfg.domains = decisions.load_all(cfg)
     return cfg

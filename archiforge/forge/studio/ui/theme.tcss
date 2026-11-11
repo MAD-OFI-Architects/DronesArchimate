@@ -54,7 +54,7 @@ HomeScreen #projects { width: 3fr; }
 HomeScreen #about { width: 2fr; }
 
 DomainsScreen #detail { height: 1fr; overflow-y: auto; }
-DomainsScreen #portfolio { height: auto; max-height: 9; }
+DomainsScreen #portfolio { height: auto; max-height: 14; }
 
 DecisionScreen #form { width: 3fr; overflow-y: auto; }
 DecisionScreen #why { width: 2fr; overflow-y: auto; }

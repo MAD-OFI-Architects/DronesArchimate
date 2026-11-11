@@ -85,29 +85,56 @@ def test_rows_list_every_context_and_flag_the_undecided(studio):
     assert inter.aggregates >= 1 and inter.commands >= 9
 
 
-def test_draft_proposes_recommended_and_evaluation_patterns(studio):
-    d = studio.draft("Intervenciones")
-    assert all(d.uses(p) for p in service.EVAL_PATTERNS) and d.port == 5101 and d.language and d.architecture
+def choose(studio, context, lang="python", arch="hexagonal", style="microservicio", db="postgresql", patterns=(), **rationale):
+    """Lo que hace el arquitecto en el formulario: elegir todo explícitamente."""
+    d = studio.draft(context)
+    d.language, d.architecture, d.style, d.database = lang, arch, style, db
+    for p in patterns:
+        d.patterns[p] = {"usar": True}
+    d.rationale = dict(rationale)
+    return d
 
 
-def test_save_rejects_missing_evaluation_patterns_then_persists_valid_decision(studio):
+def test_blank_draft_preselects_nothing_and_offers_the_whole_catalog(studio):
     d = studio.draft("Intervenciones")
-    d.patterns["cache"] = {"usar": False}
+    assert (d.language, d.architecture, d.style, d.database) == ("", "", "", "")
+    assert d.port == 5101 and not any(v["usar"] for v in d.patterns.values()) and set(d.patterns) == set(studio.catalog())
+    ref = studio.reference()
+    assert [r["id"] for r in ref] == list(studio.catalog()) and all({"nombre", "que_es", "cuando_si", "cuando_no", "costo"} <= r.keys() for r in ref)
+    assert not any("recomend" in str(r).lower() or "evaluaci" in str(r).lower() for r in ref)
+
+
+def test_save_requires_every_choice_then_persists_exactly_what_was_chosen(studio):
+    with pytest.raises(service.StudioError) as e:
+        studio.save(studio.draft("Intervenciones"))
+    assert all(w in str(e.value) for w in ("el lenguaje", "la arquitectura interna", "el estilo de servicio", "la base de datos"))
+    d = choose(studio, "Intervenciones", lang="csharp", arch="clean-ddd", db="mongodb", lenguaje="porque sí")          # ningún patrón
+    path = studio.save(d)
+    saved = studio.draft("Intervenciones")
+    assert path.exists() and next(r for r in studio.rows() if r.context == "Intervenciones").decided
+    assert (saved.language, saved.database) == ("csharp", "mongodb") and not any(v["usar"] for v in saved.patterns.values())
+    assert saved.rationale["lenguaje"] == "porque sí"
+    assert studio.draft("Repuestos del Taller").port == 5102                       # el siguiente puerto libre
+
+
+def test_pattern_dependencies_are_reported_not_auto_selected(studio):
+    d = choose(studio, "Intervenciones", patterns=("pipeline",))                   # pipeline requiere cqrs
     with pytest.raises(service.StudioError) as e:
         studio.save(d)
-    assert "caché" in str(e.value).lower()
-    d.patterns["cache"] = {"usar": True}
-    d.rationale = {"lenguaje": "porque sí"}
-    path = studio.save(d)
-    assert path.exists() and next(r for r in studio.rows() if r.context == "Intervenciones").decided
-    assert studio.draft("Intervenciones").rationale["lenguaje"] == "porque sí"            # el borrador devuelve lo guardado
-    assert studio.draft("Repuestos del Taller").port == 5102                               # y el siguiente puerto libre
+    assert "cqrs" in str(e.value) and not studio.draft("Intervenciones").uses("pipeline")
+
+
+def test_policy_findings_and_requirements_exist_only_when_the_project_declares_them(studio):
+    assert studio.policy_findings() == []                                          # sin [policy]: nada que mostrar ni exigir
+    assert studio.check(choose(studio, "Intervenciones"))[0] == []                 # ni siquiera la caché
+    studio.cfg.policy = {"required_patterns": ["cache"], "min_domains": 2}
+    errors, _ = studio.check(choose(studio, "Intervenciones"))
+    assert any("política" in e.lower() and "caché" in e.lower() for e in errors)
+    assert studio.policy_findings() and all(f[0] in "✓✗" for f in studio.policy_findings())
 
 
 def test_progress_lists_every_stage_pending_before_building(studio):
-    d = studio.draft("Intervenciones")
-    d.rationale = {"lenguaje": "x"}
-    studio.save(d)
+    studio.save(choose(studio, "Intervenciones", lang="csharp", arch="clean-ddd", db="mongodb"))
     rows = studio.progress(studio.cfg.domains[0])
     assert rows[0].id == "S00-ir" and all(r.status == "pending" for r in rows) and any(r.id == "S40-microfrontend" for r in rows)
 
@@ -115,8 +142,7 @@ def test_progress_lists_every_stage_pending_before_building(studio):
 def test_build_requires_domains_and_can_be_cancelled(studio):
     with pytest.raises(service.StudioError):
         studio.start_build([], print)
-    d = studio.draft("Repuestos del Taller")
-    studio.save(d)
+    studio.save(choose(studio, "Repuestos del Taller"))
     lines = []
     h = studio.start_build(studio.cfg.domains, lines.append, laps=1)
     h.cancel()
@@ -137,8 +163,10 @@ def test_weak_argument_rejects_drafts_and_short_text():
     assert not gates.weak_argument("Elegimos C# por el tipado fuerte y el soporte de DDD que necesita el agregado.")
 
 
-def test_check_warns_about_draft_justifications(studio):
-    d = studio.draft("Intervenciones")
-    d.rationale = {"lenguaje": "Ejemplo: C# por tipado fuerte y soporte de DDD.", "estilo": "Elegimos microservicio porque publica y consume eventos del ciclo de la OT."}
+def test_check_warns_about_draft_justifications_only_when_the_project_asks_for_them(studio):
+    d = choose(studio, "Intervenciones", lenguaje="Ejemplo: C# por tipado fuerte y soporte de DDD.",
+               estilo="Elegimos microservicio porque publica y consume eventos del ciclo de la OT.")
+    assert studio.check(d)[1] == []                                                # producto neutral: no regaña
+    studio.cfg.policy = {"require_justifications": True}
     _, warns = studio.check(d)
     assert any("«lenguaje»" in w and "borrador" in w for w in warns) and not any("«estilo»" in w and "borrador" in w for w in warns)

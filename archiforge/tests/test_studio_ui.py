@@ -98,6 +98,17 @@ def test_new_project_rejects_a_file_that_is_not_a_model(env):
     run(go())
 
 
+def _choose(screen, lang="python", arch="hexagonal", style="microservicio", db="postgresql", patterns=()):
+    """El arquitecto elige explícitamente cada opción: el formulario no trae ninguna elegida."""
+    screen.query_one("#language", Select).value = lang
+    screen.query_one("#architecture", Select).value = arch
+    screen.query_one("#style", Select).value = style
+    screen.query_one("#database", Select).value = db
+    sel = screen.query_one("#patterns", SelectionList)
+    for p in patterns:
+        sel.select(p)
+
+
 def _open_decision(app, pilot, context):
     async def go():
         await pilot.press("enter")
@@ -110,7 +121,7 @@ def _open_decision(app, pilot, context):
     return go()
 
 
-def test_decision_screen_blocks_missing_evaluation_patterns_then_saves(env):
+def test_decision_form_starts_blank_and_refuses_to_save_until_everything_is_chosen(env):
     store, creds, info = env
 
     async def go():
@@ -119,17 +130,34 @@ def test_decision_screen_blocks_missing_evaluation_patterns_then_saves(env):
             await wait_for(pilot, lambda: type(app.screen).__name__ == "HomeScreen")
             await _open_decision(app, pilot, "Intervenciones")
             s = app.screen
-            sel = s.query_one("#patterns", SelectionList)
-            sel.deselect("cache")
+            assert all(not isinstance(s.query_one(f"#{i}", Select).value, str) for i in ("language", "architecture", "style", "database"))
+            assert list(s.query_one("#patterns", SelectionList).selected) == []                  # ningún patrón preseleccionado
+            assert not any(w in str(s.query_one("#advice").render()).lower() for w in ("recomend", "evaluaci", "aconsej"))
             await pilot.press("ctrl+s")
             await pilot.pause(0.3)
-            assert "caché" in banner_text(s).lower() and not (info.root / "decisiones/intervenciones.toml").exists()
-            sel.select("cache")
+            assert "Elige el lenguaje" in banner_text(s) and not (info.root / "decisiones/intervenciones.toml").exists()
+            _choose(s, "csharp", "clean-ddd", "microservicio", "mongodb", patterns=("cqrs",))
             s.query_one("#why-lenguaje").text = "C# por tipado fuerte y soporte de DDD en el agregado Orden de trabajo."
             await pilot.press("ctrl+s")
             await wait_for(pilot, lambda: type(app.screen).__name__ == "DomainsScreen")
         saved = (info.root / "decisiones/intervenciones.toml").read_text(encoding="utf-8")
-        assert 'contexto = "Intervenciones"' in saved and "tipado fuerte" in saved
+        assert 'contexto = "Intervenciones"' in saved and "tipado fuerte" in saved and "cqrs = true" in saved and "cache = false" in saved
+    run(go())
+
+
+def test_pattern_dependency_is_reported_in_the_form_not_silently_added(env):
+    store, creds, info = env
+
+    async def go():
+        app = StudioApp(store, creds)
+        async with app.run_test(size=SIZE) as pilot:
+            await wait_for(pilot, lambda: type(app.screen).__name__ == "HomeScreen")
+            await _open_decision(app, pilot, "Intervenciones")
+            s = app.screen
+            _choose(s, patterns=("pipeline",))                      # pipeline requiere cqrs
+            await pilot.press("ctrl+s")
+            await pilot.pause(0.3)
+            assert "cqrs" in banner_text(s) and "cqrs" not in s.query_one("#patterns", SelectionList).selected
     run(go())
 
 
@@ -226,6 +254,7 @@ def test_build_screen_streams_the_log_and_reports_failure_without_crashing(env):
         async with app.run_test(size=SIZE) as pilot:
             await wait_for(pilot, lambda: type(app.screen).__name__ == "HomeScreen")
             await _open_decision(app, pilot, "Repuestos del Taller")
+            _choose(app.screen)
             await pilot.press("ctrl+s")
             await wait_for(pilot, lambda: type(app.screen).__name__ == "DomainsScreen")
             await pilot.press("b")
@@ -248,6 +277,7 @@ def test_assemble_without_built_domains_explains_instead_of_crashing(env):
         async with app.run_test(size=SIZE) as pilot:
             await wait_for(pilot, lambda: type(app.screen).__name__ == "HomeScreen")
             await _open_decision(app, pilot, "Repuestos del Taller")
+            _choose(app.screen)
             await pilot.press("ctrl+s")
             await wait_for(pilot, lambda: type(app.screen).__name__ == "DomainsScreen")
             await pilot.press("a")
@@ -289,7 +319,7 @@ def test_draft_justifications_show_as_grey_suggestions_and_empty_fields_drop_the
     assert "Ejemplo:" not in saved and "Elegimos microservicio" in saved
 
 
-def test_assemble_failure_for_draft_arguments_tells_where_to_fix_it(env):
+def test_assemble_failure_for_unjustified_decisions_tells_where_to_fix_it(env):
     store, creds, info = env
 
     async def go():
@@ -297,12 +327,13 @@ def test_assemble_failure_for_draft_arguments_tells_where_to_fix_it(env):
         async with app.run_test(size=SIZE) as pilot:
             await wait_for(pilot, lambda: type(app.screen).__name__ == "HomeScreen")
             await _open_decision(app, pilot, "Repuestos del Taller")
+            _choose(app.screen)
             await pilot.press("ctrl+s")
             await wait_for(pilot, lambda: type(app.screen).__name__ == "DomainsScreen")
             await pilot.press("a")
             await wait_for(pilot, lambda: type(app.screen).__name__ == "AssembleScreen")
             s = app.screen
-            s.lines.append("❌ evaluación: decisiones argumentadas:")          # lo que imprime el ensamblado real
+            s.lines.append("❌ política: decisiones justificadas:")          # lo que imprime el ensamblado real
             s.done(1)
-            assert "justificaciones reales" in banner_text(s)
+            assert "justificar cada decisión" in banner_text(s)
     run(go())

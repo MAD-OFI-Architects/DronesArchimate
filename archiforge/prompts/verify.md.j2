@@ -8,7 +8,7 @@ Revisa, con evidencia (archivo:línea):
 2. **SOLID** (SRP, OCP/Strategy donde aplique, LSP, ISP: puertos pequeños, DIP: el dominio no depende de infraestructura).
 3. **DDD**: invariantes dentro del agregado, eventos levantados por la raíz, VOs inmutables, lenguaje ubicuo (los términos «avoid» del IR no aparecen), agregados sin acceso directo a otros agregados.
 4. **ADR**: cada fila de la tabla de patrones de `out/docs/{{ d.slug }}/decisiones-arquitectura.md` existe y cumple su rol; completa las que falten citando clases reales entre comillas invertidas. La tabla no es evidencia por sí misma: contrástala con referencias de producción y con el composition root.
-5. **Requisitos de la evaluación** (`reference/evaluacion_final.md`) que apliquen a este dominio y estén cubiertos por las decisiones; señala los que el arquitecto decidió no cubrir.
+5. **Políticas del proyecto**{% if cfg.policy %} declaradas en `forge.toml` (`[policy]`): {% for k, v in cfg.policy.items() %}`{{ k }}`{% if not loop.last %}, {% endif %}{% endfor %}. Comprueba que este dominio las cumple y señala las que no{% else %}: este proyecto no declara ninguna; no inventes requisitos{% endif %}.
 6. **Seguridad básica**: secretos fuera del código, datos personales cifrados si se eligió `cifrado`, validación de entrada, sin SQL concatenado.
 7. Ejecuta las pruebas del servicio y del microfrontend y reporta el resultado real.
 

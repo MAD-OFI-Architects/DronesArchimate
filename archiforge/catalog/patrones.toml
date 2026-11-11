@@ -1,6 +1,5 @@
-# Catálogo de patrones. La herramienta RECOMIENDA a partir del ArchiMate; el arquitecto DECIDE en decisiones/<dominio>.toml.
-# "manifiesto": qué símbolos exige el verificador cuando el patrón se usa. Sin patrón elegido, no se exige ni se genera.
-# "evaluacion = true": la evaluación final lo pide; si el diseño no lo cubre, FALLA (quality.enforce_evaluation=false lo rebaja a aviso).
+# Catálogo de patrones: referencia informativa. No recomienda ni preselecciona nada; el arquitecto elige en decisiones/<dominio>.toml.
+# "requiere": dependencias técnicas entre patrones. "manifiesto": símbolos que el verificador exige cuando el patrón se usa.
 
 [cqrs]
 nombre = "CQRS con mediador"
@@ -28,7 +27,6 @@ que_es = "Snapshot inmutable del estado del agregado para persistirlo y reconstr
 cuando_si = "El agregado se guarda como documento o necesita restaurarse/deshacerse; el dominio no debe conocer la persistencia."
 cuando_no = "El ORM ya mapea el agregado directamente y no hay deshacer."
 costo = "Bajo-medio: un record por agregado."
-evaluacion = true
 manifiesto = "<Raiz>Memento por agregado."
 
 [state]
@@ -84,7 +82,6 @@ que_es = "Un decorador del repositorio de lectura guarda resultados con TTL e in
 cuando_si = "Lecturas frecuentes de datos que cambian poco."
 cuando_no = "Datos que cambian a cada operación o deben ser siempre exactos."
 costo = "Bajo, pero exige una política de invalidación."
-evaluacion = true
 manifiesto = "RepositorioCacheado<Raiz> por agregado."
 
 [cifrado]
@@ -94,5 +91,4 @@ que_es = "Un puerto Cifrador con implementación AES-GCM cifra en reposo los dat
 cuando_si = "El contrato exige proteger datos personales (p. ej. Ley 1581 de 2012)."
 cuando_no = "El servicio no guarda datos sensibles."
 costo = "Bajo; la clave viaja por variable de entorno."
-evaluacion = true
 manifiesto = "Cifrador (puerto) y CifradorAes (AES-GCM)."

@@ -1,4 +1,4 @@
-"""Decisiones del arquitecto: un archivo por dominio (decisiones/<dominio>.toml). La herramienta recomienda; aquí se decide."""
+"""Decisiones del arquitecto: un archivo por dominio (decisiones/<dominio>.toml). Aquí se decide todo; la herramienta no elige."""
 from __future__ import annotations
 
 import tomllib
@@ -78,16 +78,14 @@ def validate(cfg: Config, d: Domain) -> tuple[list[str], list[str]]:
         for req in cat.get(pid, {}).get("requiere", []):
             if p.get("usar") and not d.uses(req):
                 errors.append(f"el patrón «{pid}» requiere «{req}» (actívalo o desactiva «{pid}»).")
-    # La evaluación final (V1) exige caché, estados (memento) y cifrado en cada aplicación: por defecto es un ERROR.
-    # Para un uso ajeno a la evaluación: [quality] enforce_evaluation = false en forge.toml (entonces solo avisa).
-    enforce = cfg.raw.get("quality", {}).get("enforce_evaluation", True)
-    for pid, spec in cat.items():
-        if spec.get("evaluacion") and not d.uses(pid):
-            msg = f"La evaluación exige «{spec['nombre']}» en cada aplicación y este diseño no lo usa (actívalo con --patterns {pid}, o enforce_evaluation=false)."
-            (errors if enforce else warns).append(msg)
-    for k in ("lenguaje", "base_de_datos", "arquitectura", "estilo"):
-        if not d.rationale.get(k):
-            warns.append(f"Falta la justificación de «{k}» (el ADR la necesita, y es tu argumento ante el profesor).")
+    # Reglas opcionales del equipo ([policy] en forge.toml): sin esa sección no se exige ningún patrón.
+    for pid in cfg.policy.get("required_patterns", []):
+        if pid in cat and not d.uses(pid):
+            errors.append(f"La política del proyecto exige «{cat[pid]['nombre']}» en cada dominio (actívalo con --patterns {pid}).")
+    if cfg.policy.get("require_justifications"):
+        for k in ("lenguaje", "base_de_datos", "arquitectura", "estilo"):
+            if not d.rationale.get(k):
+                warns.append(f"Falta la justificación de «{k}»: la política del proyecto pide documentar cada decisión.")
     return errors, warns
 
 

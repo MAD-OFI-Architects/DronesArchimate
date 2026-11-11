@@ -14,14 +14,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable
 
-from .. import advisor, cli, decisions
+from .. import cli, contextinfo, decisions
 from ..archimate import build_ir
 from ..config import Config, Domain
 from ..credentials import CredentialStore
 from ..stages import build_stages
 
 Sink = Callable[[str], None]
-EVAL_PATTERNS = ("memento", "cache", "cifrado")        # la evaluación los exige; el catálogo los marca con `evaluacion = true`
 
 
 class StudioError(ValueError):
@@ -127,35 +126,34 @@ class Studio:
     def catalog(self) -> dict:
         return decisions.catalog(self.cfg.tool_root)
 
-    def advice(self, context: str) -> list[dict]:
-        return advisor.advise(self.ir, context, self.catalog())
+    def reference(self) -> list[dict]:
+        """Fichas informativas de los patrones del catálogo (en el orden del catálogo). Solo describen: no recomiendan ni preseleccionan."""
+        return [{"id": pid, **spec} for pid, spec in self.catalog().items()]
 
     def facts(self, context: str) -> dict:
-        return advisor.facts(self.ir, context)
+        return contextinfo.facts(self.ir, context)
 
     def draft(self, context: str) -> Domain:
-        """Borrador editable: la decisión guardada o, si no hay, una propuesta (patrones recomendados + los que exige la evaluación).
-        La herramienta propone; el arquitecto confirma."""
+        """La decisión guardada o, si no hay, un formulario EN BLANCO: ningún lenguaje, arquitectura, estilo, base de datos ni patrón
+        viene elegido. El arquitecto decide todo."""
         cur = next((d for d in self.cfg.domains if d.context == context), None)
         if cur:
             return dataclasses.replace(cur, patterns={k: dict(v) for k, v in cur.patterns.items()}, rationale=dict(cur.rationale))
         used = {d.port for d in self.cfg.domains}
         port = next(p for p in range(5101, 5300) if p not in used)
-        advice = self.advice(context)
-        pats = {a["id"]: {"usar": a["recomendacion"] == advisor.R or a["evaluacion"]} for a in advice}
-        for _ in advice:                      # un patrón que requiere a otro arrastra su dependencia: la propuesta es siempre consistente
-            for a in advice:
-                if pats[a["id"]]["usar"]:
-                    for req in a["requiere"]:
-                        pats[req]["usar"] = True
-        return Domain(context, "python", "hexagonal", "microservicio", "postgresql", port, patterns=pats)
+        return Domain(context, "", "", "", "", port, patterns={pid: {"usar": False} for pid in self.catalog()})
 
     def check(self, d: Domain) -> tuple[list[str], list[str]]:
         from .. import gates as G
+        missing = [n for n, v in (("el lenguaje", d.language), ("la arquitectura interna", d.architecture), ("el estilo de servicio", d.style),
+                                  ("la base de datos", d.database)) if not v]
+        if missing:
+            return [f"Elige {n}." for n in missing], []
         errors, warns = decisions.validate(self.cfg, d)
-        for k in ("lenguaje", "arquitectura", "estilo", "base_de_datos"):
-            if d.rationale.get(k) and G.weak_argument(d.rationale[k]):      # la que falta del todo ya la avisa decisions.validate
-                warns.append(f"La justificación de «{k}» es un borrador o es muy corta (mín. {G.MIN_ARGUMENT} caracteres): el ensamblado la rechaza.")
+        if self.cfg.policy.get("require_justifications"):
+            for k in ("lenguaje", "arquitectura", "estilo", "base_de_datos"):
+                if d.rationale.get(k) and G.weak_argument(d.rationale[k]):      # la que falta del todo ya la avisa decisions.validate
+                    warns.append(f"La justificación de «{k}» es un borrador o es muy corta (mín. {G.MIN_ARGUMENT} caracteres): la política del proyecto la rechaza.")
         return errors, warns
 
     def save(self, d: Domain) -> Path:
@@ -166,13 +164,13 @@ class Studio:
         self.reload()
         return p
 
-    def portfolio_findings(self) -> list[str]:
-        """Lo que la evaluación pide del CONJUNTO de dominios decididos (lenguajes distintos, arquitecturas mezcladas…)."""
+    def policy_findings(self) -> list[str]:
+        """Estado de las políticas que el equipo declaró en forge.toml. Vacío si el proyecto no declara ninguna."""
         from .. import gates as G
         names = [c["name"] for c in self.ir["contexts"]]
         out = []
-        for g in G.portfolio_gates(self.cfg, self.cfg.domains, names):
-            name = g.name.removeprefix("evaluación: ")
+        for g in G.policy_gates(self.cfg, self.cfg.domains, names):
+            name = g.name.removeprefix("política: ")
             out.append(f"✓ {name}" if g.ok else f"✗ {name}: {g.detail.splitlines()[0] if g.detail else ''}")
         return out
 
