@@ -1,0 +1,25 @@
+# Dry-run: pipeline completo con un agente SIMULADO (tools/fake_agent.py). No gasta agente real ni docker ni npm.
+# Uso: python -m forge -c forge.dryrun.toml decide "Repuestos del Taller" --lang python --arch hexagonal --style microservicio --db postgresql
+#      python -m forge -c forge.dryrun.toml build "Repuestos del Taller" --laps 1 --skip-doctor
+[inputs]
+archimate = "inputs/DronesArchimate/modelo/drones-mantenimiento.archimate"
+docs_dir = "inputs/DronesArchimate"
+reference_guide = "reference/guia_ddd.md"
+
+[output]
+dir = "out_dryrun"
+state_dir = ".forge-dry"
+
+[decisions]
+dir = "decisiones_dryrun"
+
+[quality]
+min_conformance = 0.9
+strict_tools = false
+skip = ["smoke", "frontend"]
+
+[agent]
+engine = "custom"
+custom_argv = ["python3", "tools/fake_agent.py", "{prompt_file}"]
+max_attempts = 1
+timeout_minutes = 5

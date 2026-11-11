@@ -78,9 +78,13 @@ def validate(cfg: Config, d: Domain) -> tuple[list[str], list[str]]:
         for req in cat.get(pid, {}).get("requiere", []):
             if p.get("usar") and not d.uses(req):
                 errors.append(f"el patrón «{pid}» requiere «{req}» (actívalo o desactiva «{pid}»).")
+    # La evaluación final (V1) exige caché, estados (memento) y cifrado en cada aplicación: por defecto es un ERROR.
+    # Para un uso ajeno a la evaluación: [quality] enforce_evaluation = false en forge.toml (entonces solo avisa).
+    enforce = cfg.raw.get("quality", {}).get("enforce_evaluation", True)
     for pid, spec in cat.items():
         if spec.get("evaluacion") and not d.uses(pid):
-            warns.append(f"La evaluación pide «{spec['nombre']}» y este diseño no lo usa (puede ser intencional; justifícalo en el ADR).")
+            msg = f"La evaluación exige «{spec['nombre']}» en cada aplicación y este diseño no lo usa (actívalo con --patterns {pid}, o enforce_evaluation=false)."
+            (errors if enforce else warns).append(msg)
     for k in ("lenguaje", "base_de_datos", "arquitectura", "estilo"):
         if not d.rationale.get(k):
             warns.append(f"Falta la justificación de «{k}» (el ADR la necesita, y es tu argumento ante el profesor).")

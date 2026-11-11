@@ -48,6 +48,18 @@ for layer, kind, name in rows:
     for part in [d] + [d.parents[i] for i in range(len(sub.split("/")) - 1)]:
         (part / "__init__.py").touch()
     (d / f"{name.lower()}.py").write_text(f"class {name}:\n    pass\n", encoding="utf-8")
+if stage == "S13-adapters":
+    # Composition root simulado: el gate de cableado exige que todo adaptador de salida se use fuera de su archivo.
+    out_names = [n for l, k, n in rows if l == "infrastructure" and k != "file" and k != "route"]
+    http = svc / "src" / pkg / "adapters/inbound/http"; http.mkdir(parents=True, exist_ok=True)
+    imports = "".join(f"from {pkg}.adapters.outbound.{n.lower()} import {n}\n" for n in out_names)
+    # Mensajería durable sembrada por el scaffolding (python + outbox): se cablea, no se reimplementa.
+    dur = svc / "src" / pkg / "adapters/outbound/mensajeria.py"
+    if dur.exists():
+        nombres = [c for c in re.findall(r"^class\s+([A-Za-z]\w*)", dur.read_text(encoding="utf-8"), re.M) if not c.endswith("EnMemoria")]
+        imports += f"from {pkg}.adapters.outbound.mensajeria import " + ", ".join(nombres) + "\n"
+        out_names = out_names + [f"{n}" for n in nombres if n not in out_names]
+    (http / "composition.py").write_text(imports + "\nADAPTERS = (" + ", ".join(out_names) + (",)" if out_names else ")") + "\n", encoding="utf-8")
 if True:
     t = svc / "tests"; t.mkdir(exist_ok=True)
     (t / f"test_{stage.replace('-', '_')}.py").write_text("NAMES = " + repr(tests) + "\n\ndef test_ok():\n    assert isinstance(NAMES, list)\n", encoding="utf-8")

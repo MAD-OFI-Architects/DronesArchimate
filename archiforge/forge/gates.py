@@ -184,6 +184,8 @@ def arch_python(cfg: Config, slug: str) -> Gate:
 
 DEFINICION_PY = re.compile(r"^class\s+([A-Za-z_]\w*)\s*(?:\(([^)]*)\))?", re.M)
 DEFINICION_CS = re.compile(r"^\s*(?:public|internal)?\s*(?:sealed\s+|partial\s+|static\s+)*class\s+([A-Za-z_]\w*)\s*(?::([^\n{]*))?", re.M)
+DEFINICION_JAVA = re.compile(r"^\s*(?:public\s+)?(?:final\s+|abstract\s+)*class\s+([A-Za-z_]\w*)\s*(?:extends\s+[\w.<>]+\s*)?(?:implements\s+([^\n{]*))?", re.M)
+SALIDA_JAVA = re.compile(r"/(?:infrastructure|adapters/outbound)/")
 SALIDA_PY = re.compile(r"/adapters/outbound/")
 SALIDA_CS = re.compile(r"/(?:[^/]+\.)?Infrastructure/")
 
@@ -198,8 +200,8 @@ def wiring_gate(cfg: Config, d) -> Gate:
     tests es código muerto que finge cumplir un patrón.
     """
     root = _svc(cfg, d.slug)
-    es_py = d.language == "python"
-    ext, patron, salida = (".py", DEFINICION_PY, SALIDA_PY) if es_py else (".cs", DEFINICION_CS, SALIDA_CS)
+    ext, patron, salida = {"python": (".py", DEFINICION_PY, SALIDA_PY), "csharp": (".cs", DEFINICION_CS, SALIDA_CS),
+                           "java": (".java", DEFINICION_JAVA, SALIDA_JAVA)}[d.language]
     todos = list(conformance._files(root, {ext}))
     archivos = [f for f in todos if salida.search(f.as_posix())]
     if not archivos:
@@ -212,6 +214,9 @@ def wiring_gate(cfg: Config, d) -> Gate:
                 continue
             if nombre.endswith(("Base", "Memento", "Exception")) or nombre.startswith(("RelojSimulado",)):
                 continue
+            # Dobles de prueba del esqueleto de mensajería durable (los usan las pruebas canónicas, no producción).
+            if nombre.endswith("EnMemoria") and "ARCHIFORGE: mensajeria-durable" in textos[f]:
+                continue
             usado = any(otro != f and "/tests/" not in otro.as_posix() and re.search(rf"\b{nombre}\b", texto)
                         for otro, texto in textos.items())
             if not usado:
@@ -219,6 +224,16 @@ def wiring_gate(cfg: Config, d) -> Gate:
     detalle = "\n".join(sorted(muertos)[:20])
     return Gate(not muertos, "cableado de adaptadores",
                 detalle or f"{len(archivos)} archivos de adaptadores de salida: todo lo definido se usa.")
+
+
+def solid_gate(cfg: Config, d) -> Gate:
+    """SOLID comprobado en el código real (SRP, OCP, LSP, ISP, DIP); ver forge/solid.py para las señales que se miden."""
+    from . import solid
+    root = _svc(cfg, d.slug)
+    if not root.exists():
+        return Gate(True, "SOLID", f"{root} todavía no existe.")
+    found = solid.scan(root, d.language)
+    return Gate(not found, "SOLID", "\n".join(str(f) for f in found[:30]) or "sin violaciones detectables de SRP, OCP, LSP, ISP ni DIP.")
 
 
 def _is_local(root: Path, top: str) -> bool:
@@ -266,11 +281,14 @@ def build_gates(cfg: Config, d, layers: set[str] | None, label: str) -> list[Gat
     if d.language == "csharp":
         g += [dotnet_build(cfg, d.slug), dotnet_test(cfg, d.slug), arch_csproj(cfg, d.slug)]
     elif d.language == "python":
-        g += [pytest_gate(cfg, d.slug), arch_python(cfg, d.slug), wiring_gate(cfg, d)]
+        g += [pytest_gate(cfg, d.slug), arch_python(cfg, d.slug)]
     else:
         g += [maven_test(cfg, d.slug), arch_java(cfg, d.slug)]
-    if d.language == "csharp":
+    # El cableado se exige donde se ensamblan los adaptadores (etapa de adaptadores): antes, los esqueletos sembrados en S02
+    # (p. ej. la mensajería durable) todavía no tienen composition root y no deben fallar las capas de dominio/aplicación.
+    if layers is None or "infrastructure" in layers:
         g += [wiring_gate(cfg, d)]
+    g += [solid_gate(cfg, d)]
     return g
 
 
@@ -410,8 +428,79 @@ def smoke_assembled_gate(cfg: Config, domains: list) -> Gate:
         run_cmd(["docker", "compose", "down", "-v"], cfg.out, timeout=300, env=env)
 
 
+def design_gate(cfg: Config, rel: str) -> Gate:
+    """El microfrontend debe usar el sistema de diseño del shell (tokens --mfe-* y vocabulario de clases) y no CSS suelto."""
+    root = cfg.out / rel
+    css = root / "src" / "styles.css"
+    if not css.exists():
+        return Gate(False, f"sistema de diseño ({rel})", f"Falta {css.relative_to(cfg.out)}.")
+    text = css.read_text(encoding="utf-8", errors="ignore")
+    problems = []
+    if text.count("var(--mfe-") < 10:
+        problems.append("styles.css casi no usa los tokens var(--mfe-*): el remote debe heredar el diseño del shell.")
+    if len(re.findall(r"#[0-9a-fA-F]{3,8}\b", re.sub(r"var\(--mfe-[\w-]+,[^)]*\)", "", text))) > 0:
+        problems.append("styles.css tiene colores fijos fuera de var(--mfe-…, respaldo): usa los tokens.")
+    tsx = "\n".join(p.read_text(encoding="utf-8", errors="ignore") for p in conformance._files(root / "src", {".tsx"}) if "__tests__" not in p.as_posix())
+    for cls in ("card", "field"):
+        if f'className="{cls}' not in tsx and f"className='{cls}" not in tsx and f"`{cls}" not in tsx:
+            problems.append(f"Ningún componente usa la clase «{cls}» del sistema de diseño.")
+    if "style={{" in tsx:
+        problems.append("Hay estilos en línea (style={{…}}): muévelos al sistema de diseño.")
+    return Gate(not problems, f"sistema de diseño ({rel})", "\n".join(problems) or "tokens y clases del sistema de diseño en uso.")
+
+
+def shell_design_gate(cfg: Config) -> Gate:
+    css = cfg.out / "frontend" / "mfe-shell" / "src" / "shell.css"
+    ok = css.exists() and "--mfe-primary" in css.read_text(encoding="utf-8", errors="ignore")
+    return Gate(ok, "sistema de diseño (shell)", "tokens --mfe-* definidos en el shell." if ok else "El shell no define los tokens --mfe-* (src/shell.css).")
+
+
 def stubs_gate(cfg: Config, rel: str) -> Gate:
     """Falla si quedan marcas FORGE-STUB (esqueleto generado sin completar)."""
     root = cfg.out / rel
     left = [str(p.relative_to(cfg.out)) for p in conformance._files(root, {".ts", ".tsx"}) if "FORGE-STUB" in p.read_text(encoding="utf-8", errors="ignore")]
     return Gate(not left, f"sin esqueletos pendientes ({rel})", ("Completa y quita la marca FORGE-STUB en: " + ", ".join(left[:20])) if left else "ok")
+
+
+# ------------------------------------------------------------------ Portafolio (reglas ENTRE dominios de la evaluación)
+PLACEHOLDER = re.compile(r"^\s*(ejemplo|todo|tbd|x|n/?a|pendiente)\b", re.I)
+MIN_ARGUMENT = 30
+
+
+def portfolio_gates(cfg: Config, built: list, all_contexts: list[str]) -> list[Gate]:
+    """Lo que la evaluación pide del CONJUNTO: 2 dominios reales, lenguajes distintos, arquitecturas mezcladas, argumentos
+    reales (no los borradores «Ejemplo: …») y el resto de contextos simulados."""
+    gates = []
+    gates.append(Gate(len(built) >= 2, "evaluación: ≥ 2 dominios completos",
+                      f"{len(built)} dominio(s) construido(s): {', '.join(d.context for d in built) or 'ninguno'}."))
+    langs: dict[str, list[str]] = {}
+    for d in built:
+        langs.setdefault(d.language, []).append(d.context)
+    dup = {l: c for l, c in langs.items() if len(c) > 1}
+    gates.append(Gate(not dup, "evaluación: cada dominio en un lenguaje distinto",
+                      ("; ".join(f"{l}: {', '.join(c)}" for l, c in dup.items()) + " comparten lenguaje.") if dup
+                      else ", ".join(f"{d.context}={d.language}" for d in built)))
+    archs = {d.architecture for d in built}
+    gates.append(Gate(len(archs) >= 2 or len(built) < 2, "evaluación: arquitecturas mezcladas (clean-ddd y hexagonal)",
+                      f"arquitecturas usadas: {', '.join(sorted(archs)) or 'ninguna'}."))
+    weak = []
+    for d in built:
+        for k in ("lenguaje", "arquitectura", "estilo", "base_de_datos"):
+            v = (d.rationale.get(k) or "").strip()
+            if len(v) < MIN_ARGUMENT or PLACEHOLDER.match(v):
+                weak.append(f"{d.context}.{k}: «{v[:40]}» no es un argumento (borrador o demasiado corto; mín. {MIN_ARGUMENT} caracteres).")
+    gates.append(Gate(not weak, "evaluación: decisiones argumentadas", "\n".join(weak) or "todas las decisiones tienen justificación propia."))
+    sim = cfg.out / "simulators" / "simulators.json"
+    real = {d.context for d in built}
+    pending = [c for c in all_contexts if c not in real]
+    try:
+        data = json.loads(sim.read_text(encoding="utf-8"))
+        simulated = {x["context"] for x in data.get("emits", []) + data.get("apis", [])}
+    except (OSError, ValueError, KeyError):
+        data, simulated = None, set()
+    overlap = simulated & real
+    gates.append(Gate(data is not None and (not pending or bool(simulated)) and not overlap, "evaluación: dominios restantes simulados",
+                      "Falta out/simulators/simulators.json o está vacío." if data is None or (pending and not simulated)
+                      else (f"Se simula un dominio que ya es real: {', '.join(sorted(overlap))}." if overlap
+                            else f"{len(simulated)} contexto(s) simulado(s): {', '.join(sorted(simulated))}.")))
+    return gates

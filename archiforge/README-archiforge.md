@@ -12,7 +12,7 @@ ArchiForge **aconseja** (según el modelo ArchiMate) y **ejecuta con fidelidad a
 
 Opciones: lenguaje `csharp|python|java` · arquitectura `clean-ddd|hexagonal` · estilo `microservicio|soa|monolito-modular` · BD `mongodb|postgresql` ·
 patrones del catálogo `catalog/patrones.toml` (cqrs, pipeline, memento, state, specification, outbox, eventos, acl, cache, cifrado).
-Lo que la evaluación exige (caché, memento, cifrado) solo genera **avisos** si no lo eliges; nunca se impone.
+Lo que la evaluación exige (caché, memento, cifrado) es **obligatorio** por defecto (`[quality] enforce_evaluation = false` lo rebaja a aviso).
 
 ## En paralelo / varias personas
 Cada dominio tiene su estado (`.forge/<dominio>/`), su plataforma de humo aislada y commits acotados a sus carpetas. Dos formas:

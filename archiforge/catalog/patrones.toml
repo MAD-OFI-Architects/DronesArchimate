@@ -1,6 +1,6 @@
 # Catálogo de patrones. La herramienta RECOMIENDA a partir del ArchiMate; el arquitecto DECIDE en decisiones/<dominio>.toml.
 # "manifiesto": qué símbolos exige el verificador cuando el patrón se usa. Sin patrón elegido, no se exige ni se genera.
-# "evaluacion = true": la evaluación final lo pide; si el diseño no lo cubre, se AVISA (no se impone).
+# "evaluacion = true": la evaluación final lo pide; si el diseño no lo cubre, FALLA (quality.enforce_evaluation=false lo rebaja a aviso).
 
 [cqrs]
 nombre = "CQRS con mediador"

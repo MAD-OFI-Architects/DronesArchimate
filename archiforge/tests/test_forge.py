@@ -93,8 +93,11 @@ def test_decisions_roundtrip_and_validation(tmp_path):
     assert any("cqrs" in e for e in errors)
     d.patterns = {"cqrs": {"usar": True}, "pipeline": {"usar": True}, "cache": {"usar": False}}
     d.rationale = {"lenguaje": "x"}
-    errors, warns = decisions.validate(c, d)
-    assert not errors and any("cache" in w.lower() or "caché" in w.lower() for w in warns)
+    errors, warns = decisions.validate(c, d)      # la evaluación EXIGE caché, memento y cifrado: omitirlos es un error
+    assert any("caché" in e.lower() for e in errors) and any("memento" in e.lower() for e in errors)
+    relaxed = dataclasses.replace(c, raw={**c.raw, "quality": {**c.raw.get("quality", {}), "enforce_evaluation": False}})
+    errors, warns = decisions.validate(relaxed, d)    # opt-out explícito: vuelve a ser aviso
+    assert not errors and any("caché" in w.lower() for w in warns)
     p = decisions.write(c, d)
     back = decisions.read(p)
     assert (back.language, back.architecture, back.style, back.database) == ("python", "hexagonal", "microservicio", "postgresql")
@@ -222,3 +225,84 @@ def test_dryrun_end_to_end_with_fake_agent(tmp_path):
     assert json.loads(run("-d", "Repuestos del Taller", "next").stdout.split("\n", 2)[-1] if False else (work / ".forge-dry/repuestos-del-taller/state.json").read_text())["S60-report"]["status"] == "passed"
     ratio = json.loads((work / "out_dryrun/docs/repuestos-del-taller/conformidad.json").read_text())["ratio"]
     assert ratio >= 0.9
+
+
+# ------------------------------------------------------------------ SOLID y portafolio (reglas de la evaluación)
+def _write(root, rel, text):
+    f = root / rel
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(text, encoding="utf-8")
+
+
+def test_solid_scan_flags_each_principle_in_python(tmp_path):
+    from forge import solid
+    wide = "".join(f"    def m{i}(self): ...\n" for i in range(9))
+    _write(tmp_path, "src/p/application/caso.py",
+           "class Caso:\n    def run(self, e):\n        repo = RepositorioMongo()\n"
+           "        if isinstance(e, A): pass\n        elif isinstance(e, B): pass\n        elif isinstance(e, C): pass\n        elif isinstance(e, D): pass\n"
+           "class Puerto(Protocol):\n" + wide)
+    _write(tmp_path, "src/p/domain/hijo.py", "class Hijo(Base):\n    def f(self):\n        raise NotImplementedError\n")
+    got = {f.principle for f in solid.scan(tmp_path, "python")}
+    assert got == {"OCP", "LSP", "ISP", "DIP"}
+
+
+def test_solid_scan_ignores_primitive_validation_and_properties(tmp_path):
+    from forge import solid
+    _write(tmp_path, "src/p/domain/guard.py", "def g(v):\n    return all(isinstance(v, t) for t in (str,)) or isinstance(v, str) or isinstance(v, int) or isinstance(v, bool) or isinstance(v, float)\n")
+    props = "".join(f"    @property\n    def p{i}(self):\n        return 1\n" for i in range(20))
+    _write(tmp_path, "src/p/domain/agg.py", "class Agg:\n" + props)
+    assert solid.scan(tmp_path, "python") == []
+
+
+def test_solid_scan_csharp_and_java_signals(tmp_path):
+    from forge import solid
+    _write(tmp_path, "src/X.Application/Caso.cs", "public class Caso { public void Run() { var r = new RepositorioMongo(); throw new NotSupportedException(); } }\n")
+    assert {f.principle for f in solid.scan(tmp_path, "csharp")} == {"DIP", "LSP"}
+    _write(tmp_path, "src/main/java/p/application/Caso.java", "public class Caso { void run() { throw new UnsupportedOperationException(); } }\n")
+    assert {f.principle for f in solid.scan(tmp_path / "src/main", "java")} == {"LSP"}
+
+
+def test_build_gates_include_solid_and_java_wiring():
+    import inspect
+    src = inspect.getsource(G.build_gates)
+    assert "solid_gate" in src and "wiring_gate" in src and '"infrastructure" in layers' in src   # cableado: solo en la etapa de adaptadores
+
+
+def test_portfolio_requires_distinct_languages_mixed_architectures_and_real_arguments(tmp_path):
+    cfg = dataclasses.replace(config.load(ROOT / "forge.toml"), out=tmp_path)
+    why = {k: "Argumento propio y suficientemente largo para la evaluación." for k in ("lenguaje", "arquitectura", "estilo", "base_de_datos")}
+    a = dom("A", "python", "hexagonal"); b = dom("B", "python", "hexagonal")
+    a.rationale = b.rationale = why
+    res = {g.name: g for g in G.portfolio_gates(cfg, [a, b], ["A", "B", "C"])}
+    assert not res["evaluación: cada dominio en un lenguaje distinto"].ok
+    assert not res["evaluación: arquitecturas mezcladas (clean-ddd y hexagonal)"].ok
+    assert not res["evaluación: dominios restantes simulados"].ok            # no hay simulators.json
+    b = dom("B", "csharp", "clean-ddd"); b.rationale = dict(why, lenguaje="Ejemplo: C# por tipado fuerte y soporte de DDD.")
+    res = {g.name: g for g in G.portfolio_gates(cfg, [a, b], ["A", "B"])}
+    assert res["evaluación: cada dominio en un lenguaje distinto"].ok and res["evaluación: arquitecturas mezcladas (clean-ddd y hexagonal)"].ok
+    assert not res["evaluación: decisiones argumentadas"].ok
+    assert res["evaluación: ≥ 2 dominios completos"].ok
+
+
+def test_scaffolded_frontend_ships_a_design_system_and_passes_the_design_gate(tmp_path):
+    from forge import scaffold
+    cfg = dataclasses.replace(config.load(ROOT / "forge.toml"), out=tmp_path)
+    ir = build_ir(cfg.archimate, cfg.docs_dir)
+    m = build_manifest(ir, cfg.domains)
+    remotes = m["frontend"]["remotes"]
+    assert remotes
+    for r in remotes:
+        scaffold.scaffold_remote(cfg, m, r)
+        assert G.design_gate(cfg, f"frontend/{r['slug']}").ok
+    scaffold.scaffold_shell(cfg)
+    assert G.shell_design_gate(cfg).ok
+    assert "--mfe-primary" in (tmp_path / "frontend/mfe-shell/src/shell.css").read_text(encoding="utf-8")
+
+
+def test_design_gate_rejects_unstyled_remote(tmp_path):
+    cfg = dataclasses.replace(config.load(ROOT / "forge.toml"), out=tmp_path)
+    _write(tmp_path, "frontend/mfe-x/src/styles.css", "form{color:#123456}\n")
+    _write(tmp_path, "frontend/mfe-x/src/App.tsx", "export const A = () => <form style={{color:'red'}} />;\n")
+    g = G.design_gate(cfg, "frontend/mfe-x")
+    assert not g.ok and "tokens" in g.detail and "estilos en línea" in g.detail
+    assert not G.shell_design_gate(cfg).ok
