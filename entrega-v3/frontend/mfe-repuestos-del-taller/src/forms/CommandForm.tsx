@@ -1,9 +1,12 @@
-import { useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import { send, notify, mensajeDeError } from '../api';
 
-export interface Campo { name: string; label: string; type: 'text' | 'number'; min?: number }
+/** `ayuda`: texto corto bajo el campo (qué se escribe, formato y un ejemplo). */
+export interface Campo { name: string; label: string; type: 'text' | 'number'; min?: number; ayuda?: string }
 export interface CommandFormProps {
   titulo: string;
+  /** Una línea que explica para qué sirve el comando. */
+  descripcion?: string;
   campos: Campo[];
   /** Campo que viaja en la ruta (no en el cuerpo); ausente si la ruta es fija. */
   campoRuta?: string;
@@ -12,7 +15,8 @@ export interface CommandFormProps {
   camposCuerpo: string[];
 }
 
-export function CommandForm({ titulo, campos, campoRuta, ruta, camposCuerpo }: CommandFormProps) {
+export function CommandForm({ titulo, descripcion, campos, campoRuta, ruta, camposCuerpo }: CommandFormProps) {
+  const uid = useId();
   const [valores, setValores] = useState<Record<string, string>>({});
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
@@ -53,12 +57,17 @@ export function CommandForm({ titulo, campos, campoRuta, ruta, camposCuerpo }: C
     <section className="card">
       <form onSubmit={onSubmit} aria-label={titulo} noValidate>
         <h3>{titulo}</h3>
+        {descripcion && <p className="hint">{descripcion}</p>}
       {campos.map((c) => (
-        <label className="field" key={c.name}>{c.label}
-          <input type={c.type} min={c.min} value={valores[c.name] ?? ''} aria-invalid={!!errores[c.name]}
-            onChange={(e) => setValores({ ...valores, [c.name]: e.target.value })} />
-          {errores[c.name] && <span role="alert">{errores[c.name]}</span>}
-        </label>
+        <div className="campo" key={c.name}>
+          <label className="field">{c.label}
+            <input type={c.type} min={c.min} value={valores[c.name] ?? ''} aria-invalid={!!errores[c.name]}
+              aria-describedby={c.ayuda ? `${uid}-${c.name}` : undefined}
+              onChange={(e) => setValores({ ...valores, [c.name]: e.target.value })} />
+            {errores[c.name] && <span role="alert">{errores[c.name]}</span>}
+          </label>
+          {c.ayuda && <small className="hint" id={`${uid}-${c.name}`}>{c.ayuda}</small>}
+        </div>
       ))}
         <button className="btn" type="submit" disabled={enviando}>{enviando ? 'Enviando…' : titulo}</button>
         {error && <p role="alert" className="alert">{error}</p>}

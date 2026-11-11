@@ -1,3 +1,4 @@
+import { AYUDA_ID_ORDEN } from '../forms/CommandForm';
 import { useState, type FormEvent } from 'react';
 import { send } from '../api';
 import { mensajeDeError } from '../reglas';
@@ -35,7 +36,7 @@ export function OrdenDeTrabajoConsulta() {
     <section className="card" aria-label="Consulta de orden de trabajo">
       <form onSubmit={onSubmit} aria-label="Consultar orden de trabajo">
         <h3>Consultar orden de trabajo</h3>
-        <label className="field">Identificador de la orden<input value={id} onChange={(e) => setId(e.target.value)} aria-invalid={Boolean(fallo && !id.trim())} /></label>
+        <div className="campo"><label className="field">Identificador de la orden<input value={id} onChange={(e) => setId(e.target.value)} aria-invalid={Boolean(fallo && !id.trim())} aria-describedby="ayuda-consulta-orden" /></label><small className="hint" id="ayuda-consulta-orden">{AYUDA_ID_ORDEN}</small></div>
         <button type="submit" disabled={consultando}>{consultando ? 'Consultando…' : 'Consultar'}</button>
       </form>
       {fallo && <p role="alert">{fallo}</p>}

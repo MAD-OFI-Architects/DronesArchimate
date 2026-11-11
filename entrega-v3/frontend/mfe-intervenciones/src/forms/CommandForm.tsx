@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import { send, notify } from '../api';
 import { mensajeDeError } from '../reglas';
 
@@ -10,9 +10,12 @@ export interface Campo {
   obligatorio?: boolean;
   min?: number;
   paso?: string;
+  /** Ayuda corta bajo el campo: qué se escribe, formato y un ejemplo. */
+  ayuda?: string;
 }
 type Valor = string | boolean;
 
+export const AYUDA_ID_ORDEN = 'Identificador (GUID) de la orden de trabajo, p. ej. 3f2b8c1e-5a47-4d0e-9c1b-7a6e2d4f8b90. Lo ves en la consulta de órdenes o en la respuesta al abrirla.';
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const BASE = '/api/intervenciones/orden-de-trabajo';
 
@@ -41,6 +44,8 @@ function convertir(campo: Campo, valor: Valor): unknown {
 interface Props {
   titulo: string;
   segmento: string;
+  /** Una línea que explica para qué sirve el comando. */
+  descripcion?: string;
   campos: Campo[];
   /** Identificadores de idempotencia que el servicio exige en el cuerpo (p. ej. `tareaId`). */
   identificadores?: string[];
@@ -48,7 +53,8 @@ interface Props {
 }
 
 /** Formulario de un comando sobre una orden de trabajo: POST /api/intervenciones/orden-de-trabajo/{id}/{segmento}. */
-export function CommandForm({ titulo, segmento, campos, identificadores = [], sinCuerpo = false }: Props) {
+export function CommandForm({ titulo, segmento, descripcion, campos, identificadores = [], sinCuerpo = false }: Props) {
+  const uid = useId();
   const [ordenId, setOrdenId] = useState('');
   const [valores, setValores] = useState<Record<string, Valor>>({});
   const [errores, setErrores] = useState<string[]>([]);
@@ -85,25 +91,36 @@ export function CommandForm({ titulo, segmento, campos, identificadores = [], si
     <section className="card">
       <form onSubmit={onSubmit} aria-label={titulo} noValidate>
       <h3>{titulo}</h3>
-      <label className="field">Identificador de la orden
-        <input aria-invalid={errores.some((error) => error.includes('identificador'))} value={ordenId} onChange={(e) => setOrdenId(e.target.value)} />
-      </label>
+      {descripcion && <p className="hint">{descripcion}</p>}
+      <div className="campo">
+        <label className="field">Identificador de la orden
+          <input aria-invalid={errores.some((error) => error.includes('identificador'))} aria-describedby={`${uid}-orden`} value={ordenId} onChange={(e) => setOrdenId(e.target.value)} />
+        </label>
+        <small className="hint" id={`${uid}-orden`}>{AYUDA_ID_ORDEN}</small>
+      </div>
       {campos.map((c) => c.tipo === 'si-no' ? (
-        <label key={c.nombre} className="field check">
-          <input type="checkbox" checked={valores[c.nombre] === true} onChange={(e) => setValores({ ...valores, [c.nombre]: e.target.checked })} />
-          {c.etiqueta}
-        </label>
+        <div className="campo" key={c.nombre}>
+          <label className="field check">
+            <input type="checkbox" aria-describedby={c.ayuda ? `${uid}-${c.nombre}` : undefined} checked={valores[c.nombre] === true} onChange={(e) => setValores({ ...valores, [c.nombre]: e.target.checked })} />
+            {c.etiqueta}
+          </label>
+          {c.ayuda && <small className="hint" id={`${uid}-${c.nombre}`}>{c.ayuda}</small>}
+        </div>
       ) : (
-        <label key={c.nombre} className="field">{c.etiqueta}
-          <input
-            aria-invalid={Boolean(erroresPorCampo[c.nombre])}
-            type={c.tipo === 'numero' ? 'number' : c.tipo === 'fecha-hora' ? 'datetime-local' : 'text'}
-            min={c.min}
-            step={c.paso}
-            value={String(valores[c.nombre] ?? '')}
-            onChange={(e) => setValores({ ...valores, [c.nombre]: e.target.value })}
-          />
-        </label>
+        <div className="campo" key={c.nombre}>
+          <label className="field">{c.etiqueta}
+            <input
+              aria-invalid={Boolean(erroresPorCampo[c.nombre])}
+              aria-describedby={c.ayuda ? `${uid}-${c.nombre}` : undefined}
+              type={c.tipo === 'numero' ? 'number' : c.tipo === 'fecha-hora' ? 'datetime-local' : 'text'}
+              min={c.min}
+              step={c.paso}
+              value={String(valores[c.nombre] ?? '')}
+              onChange={(e) => setValores({ ...valores, [c.nombre]: e.target.value })}
+            />
+          </label>
+          {c.ayuda && <small className="hint" id={`${uid}-${c.nombre}`}>{c.ayuda}</small>}
+        </div>
       ))}
       <button type="submit" disabled={enviando}>{enviando ? 'Enviando…' : titulo}</button>
       {errores.length > 0 && <ul role="alert">{errores.map((m) => <li key={m}>{m}</li>)}</ul>}

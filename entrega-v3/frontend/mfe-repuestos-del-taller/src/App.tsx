@@ -19,9 +19,9 @@ const VISTAS: { roles: string[]; node: JSX.Element }[] = [
 /** `role` llega del shell (atributo data-role); vacío = todos los formularios de «Repuestos del Taller». */
 export function App({ role }: { role: string }) {
   return (
-    <main>
-      <h2>Repuestos del Taller{role ? ` · ${role}` : ''}</h2>
-      {VISTAS.filter((f) => !role || f.roles.includes(role)).map((f) => f.node)}
+    <main className="mfe">
+      <h2 className="mfe-title">Repuestos del Taller{role ? ` · ${role}` : ''}</h2>
+      <div className="grid">{VISTAS.filter((f) => !role || f.roles.includes(role)).map((f) => f.node)}</div>
     </main>
   );
 }

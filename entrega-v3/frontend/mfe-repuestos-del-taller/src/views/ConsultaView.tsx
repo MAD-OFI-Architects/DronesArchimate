@@ -1,9 +1,10 @@
-import { useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import { send, mensajeDeError, notify } from '../api';
 
-export interface ConsultaViewProps { titulo: string; etiqueta: string; ruta: (id: string) => string }
+export interface ConsultaViewProps { titulo: string; etiqueta: string; ruta: (id: string) => string; /** Ayuda corta bajo el campo: qué se escribe y de dónde sale. */ ayuda?: string }
 
-export function ConsultaView({ titulo, etiqueta, ruta }: ConsultaViewProps) {
+export function ConsultaView({ titulo, etiqueta, ruta, ayuda }: ConsultaViewProps) {
+  const uid = useId();
   const [id, setId] = useState('');
   const [datos, setDatos] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -24,8 +25,8 @@ export function ConsultaView({ titulo, etiqueta, ruta }: ConsultaViewProps) {
     <section className="card" aria-label={titulo}>
       <h3>{titulo}</h3>
       <form onSubmit={onSubmit} aria-label={`Buscar ${titulo}`}>
-        <label className="field">{etiqueta}<input value={id} aria-label={etiqueta} aria-invalid={!!error}
-          onChange={(e) => setId(e.target.value)} /></label>
+        <div className="campo"><label className="field">{etiqueta}<input value={id} aria-label={etiqueta} aria-invalid={!!error} aria-describedby={ayuda ? `${uid}-ayuda` : undefined}
+          onChange={(e) => setId(e.target.value)} /></label>{ayuda && <small className="hint" id={`${uid}-ayuda`}>{ayuda}</small>}</div>
         <button className="btn" type="submit" disabled={cargando}>{cargando ? 'Consultando…' : 'Consultar'}</button>
       </form>
       {error && <p role="alert" className="alert">{error}</p>}
