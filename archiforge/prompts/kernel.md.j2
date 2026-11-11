@@ -25,7 +25,7 @@ Python ≥ 3.11 con type hints. `pyproject.toml` con extra `dev` (pytest, httpx)
 {% if d.uses('outbox') %}- **Outbox**: `BandejaDeSalida` (guarda agregado + mensajes en una operación, y un despachador los publica con reintentos) y `ProcesadorDeMensajeEntrante` (**idempotente** por `eventId`).
 {% endif %}
 - **Persistencia**: puerto de almacén de {% if d.database == 'mongodb' %}documentos con implementación MongoDB y una **en memoria** para pruebas{% else %}datos relacionales (repositorio base y unidad de trabajo) con implementación sobre {{ d.language }}-PostgreSQL y una **en memoria/H2** para pruebas{% endif %}. El dominio NO conoce la base de datos.
-- **API**: mapeo de errores a **ProblemDetails RFC 9457** (`application/problem+json`): DomainException→400, BusinessRuleViolation→422 con campo `regla`, no encontrado→404, conflicto→409; correlación por petición.
+- **API**: mapeo de errores a **ProblemDetails RFC 9457** (`application/problem+json`): DomainException→400, BusinessRuleViolation→422 con los campos `regla` (clase de la regla) y `codigo` (código del contrato, MAYÚSCULAS_CON_GUION_BAJO, p. ej. `SERIE_FALTANTE`), no encontrado→404, conflicto→409 (incluye el conflicto transitorio entre transacciones concurrentes); correlación por petición. Toda regla del contrato es una clase de regla: no lances una excepción genérica para un código del contrato.
 
 ### Pruebas del kernel
 Al menos: Guard, AggregateRoot+eventos, reglas de negocio{% if d.uses('specification') %}, Especificacion{% endif %}{% if d.uses('cqrs') %}, mediador{% if d.uses('pipeline') %}+pipeline (orden y transacción){% endif %}{% endif %}{% if d.uses('outbox') %}, outbox atómico, idempotencia del procesador{% endif %}, mapeo de excepciones a ProblemDetails.

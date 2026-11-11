@@ -371,3 +371,20 @@ def test_tool_checks_lists_what_doctor_prints():
     names = [n for n, _, _ in cli.tool_checks(cfg, [dom(lang="csharp")])]
     assert "git" in names and "docker compose" in names and any(n.startswith("dotnet") for n in names)
     assert not any(n.startswith("java") for n in names)
+
+
+def test_platform_contracts_contribute_their_rules_to_the_context_that_owns_the_operations(ir):
+    """Un contrato N2 cruza contextos; si sus operaciones son comandos de un contexto, sus errores son reglas de ese contexto."""
+    n2 = next(k for k in ir["contracts"] if k["service"] == "Ejecución y liberación de intervenciones")
+    assert n2["context"] == "Intervenciones" and n2["context_por"] == "operaciones"
+    reglas = [i["name"] for i in build_manifest(ir, [dom("Intervenciones", "csharp", "clean-ddd", "microservicio", "mongodb", port=5102)])["items"]
+              if i["kind"] == "business_rule"]
+    assert "PruebaDeVueloPendiente" in reglas
+    sin_comandos = next(k for k in ir["contracts"] if k["service"] == "Identidad y permisos")
+    assert sin_comandos["context"] is None                          # no hay comandos que lo liguen a un contexto: no se adivina
+
+
+def test_prompts_ask_for_contract_codes_and_idempotent_creation():
+    leer = lambda n: (ROOT / "prompts" / n).read_text(encoding="utf-8")  # noqa: E731
+    assert "`codigo`" in leer("kernel.md.j2") and "`codigo`" in leer("layer.md.j2") and "`codigo`" in leer("mfe.md.j2")
+    assert "UUID v5" in leer("layer.md.j2")

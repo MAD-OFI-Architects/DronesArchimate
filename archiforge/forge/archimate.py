@@ -12,7 +12,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from . import mdtables
-from .util import pascal
+from .util import norm, pascal
 
 XSI = "{http://www.w3.org/2001/XMLSchema-instance}type"
 
@@ -212,6 +212,7 @@ def build_ir(archimate: Path, docs_dir: Path | None = None) -> dict:
                   for b in m.of_type("BusinessObject") if b["props"].get("Contexto")]
     roles = [{"id": r["id"], "name": r["name"], "doc": r["doc"]} for r in m.of_type("BusinessRole")]
     contracts = _contracts(m, docs_dir, list(contexts))
+    _asignar_contratos_de_plataforma(contracts, list(commands.values()), aggs)
 
     ir = {
         "model": {"file": m.path.name, "sha": m.sha()},
@@ -252,6 +253,22 @@ def _service_context(m: Model, bs: dict) -> str | None:
             return N3_TO_CONTEXT[x["name"]]
         cur += m.sources(x["id"], "CompositionRelationship")
     return None
+
+
+def _asignar_contratos_de_plataforma(contracts: list[dict], commands: list[dict], aggs: dict) -> None:
+    """Un contrato N2 cruza contextos y queda sin contexto. Si sus operaciones son comandos de UN contexto (el que más
+    coincide, sin empate), sus errores son reglas de ese contexto: se le asigna y se anota cómo (`context_por`)."""
+    por_contexto: dict[str, list[str]] = defaultdict(list)
+    for c in commands:
+        por_contexto[aggs[c["aggregate"]]["context"]].append(norm(c["name"]))
+    for k in contracts:
+        if k["context"] is not None:
+            continue
+        ops = [norm(o) for o in k["operations"] if norm(o)]
+        aciertos = {ctx: sum(1 for o in ops if any(o == n for n in nombres)) for ctx, nombres in por_contexto.items()}
+        mejor = sorted(((n, ctx) for ctx, n in aciertos.items() if n), reverse=True)
+        if mejor and (len(mejor) == 1 or mejor[0][0] > mejor[1][0]):
+            k["context"], k["context_por"] = mejor[0][1], "operaciones"
 
 
 def _contracts(m: Model, docs_dir: Path | None, context_names: list[str]) -> list[dict]:

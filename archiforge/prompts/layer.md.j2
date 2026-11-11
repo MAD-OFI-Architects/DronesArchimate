@@ -26,11 +26,12 @@ Sigue los roles y sufijos de la guía de referencia (`reference/guia_ddd.md`): `
 {% elif layer == 'application' %}
 ## Qué construir: aplicación y contratos (+ pruebas)
 - Por cada **comando**: `…Comando` (inmutable, solo primitivos), `…Validador` (forma de la entrada) y `…Manejador` (caso de uso: carga el agregado por puerto, ejecuta el método de dominio, guarda{% if d.uses('outbox') %} y escribe los eventos en la bandeja de salida{% endif %}; no sabe de HTTP ni de SQL).
+- **Creación idempotente por clave natural**: si un comando crea un agregado y el contrato lo hace idempotente por una clave del negocio (p. ej. una parada), el id del agregado se deriva de esa clave (UUID v5): comprobar «existe» y luego insertar no basta, porque dos ejecuciones simultáneas lo pasan; con el id derivado la segunda choca en el almacén y responde 409 en lugar de duplicar. Las búsquedas por esa clave leen por el id derivado, no recorren la colección.
 {% if d.uses('cqrs') %}- **CQRS (elegido)**: consultas con sus manejadores, `…Dto` y `…Mapeador` (el dominio nunca sale por la API); todo se despacha por el mediador{% if d.uses('pipeline') %} con el pipeline Registro → Validación → Transacción{% endif %}.
 {% else %}- Sin CQRS: los casos de uso son los manejadores de comando; las lecturas de la API consultan el repositorio a través de un puerto de lectura simple (no crees Consulta/Dto/Mapeador).
 {% endif %}
 {% if d.uses('eventos') %}- **contracts**: los eventos publicados como `…V1` (solo primitivos, sin referencias a otras capas) y `{{ d.prefix }}Topicos` (`<contexto>.<evento>.v1` en kebab-case; fija el sobre y el payload `out/docs/{{ d.slug }}/contrato-bus.md`).
-- **Traductores** (evento de dominio → `…V1`, conservando el id del evento) y **Consumidores** (evento entrante → comando; la columna «→» de la tabla dice cuál; **idempotentes**). Las **políticas internas** (`…Observador`) reaccionan a eventos del mismo contexto despachando el comando indicado.
+- **Traductores** (evento de dominio → `…V1`, conservando el id del evento) y **Consumidores** (evento entrante → comando; la columna «→» de la tabla dice cuál; **idempotentes**: el evento se marca como procesado solo al terminar, y por eso cada elemento del evento se procesa de forma idempotente, de modo que reintentar un evento a medias no duplica ni falla). Las **políticas internas** (`…Observador`) reaccionan a eventos del mismo contexto despachando el comando indicado.
 {% endif %}
 {% if d.uses('acl') %}- **ACL (elegido)**: puertos de salida `I…` hacia otros contextos (la implementación va en la capa de adaptadores).
 {% endif %}
@@ -54,7 +55,7 @@ Sigue los roles y sufijos de la guía de referencia (`reference/guia_ddd.md`): `
 {% endfor %}{% for p in info.provides %}- **Contrato síncrono que este servicio ofrece**: expón `POST /api/{{ p.slug }}` (cuerpo y respuesta JSON); lo usan {{ p.consumers | join(', ') }}.
 {% endfor %}
 {% endif %}
-- **API HTTP**: `{{ d.prefix }}Endpoints`, una `…Solicitud` por comando (cuerpo validado), las **rutas** de la tabla (`POST /api/<agregado>` crea; `POST /api/<agregado>/{id}/<comando>`; `GET /api/<agregado>/{id}`), `GET /health`, errores como `application/problem+json` (regla rota 422, no encontrado 404, validación 400), y `{{ d.prefix }}Composicion` (único lugar que conoce todas las capas). Puerto **{{ d.port }}**.
+- **API HTTP**: `{{ d.prefix }}Endpoints`, una `…Solicitud` por comando (cuerpo validado), las **rutas** de la tabla (`POST /api/<agregado>` crea; `POST /api/<agregado>/{id}/<comando>`; `GET /api/<agregado>/{id}`), `GET /health`, errores como `application/problem+json` (regla rota 422 con `regla` y `codigo` del contrato, no encontrado 404, validación 400, conflicto de concurrencia 409), y `{{ d.prefix }}Composicion` (único lugar que conoce todas las capas). Puerto **{{ d.port }}**.
 {% if d.style == 'monolito-modular' %}- `{{ d.prefix }}Modulos` registra los módulos y sus fachadas.
 {% endif %}
 - **Dockerfile** multi‑etapa y **README.md** del servicio (cómo correr, variables, rutas, decisiones).
