@@ -8,3 +8,4 @@
 - `CifradorAes` exige `cryptography` (ya declarada en `pyproject.toml`); se eliminó el fallback XOR+HMAC. Si `CIFRADO_CLAVE` falta usa una clave local derivada: aceptable solo en desarrollo.
 - El `DATABASE_URL` del compose viene en formato de SQLAlchemy (`postgresql+psycopg://…`); el servicio lo normaliza a `postgresql://` antes de `psycopg.connect`, porque el driver no entiende el sufijo de dialecto.
 - El humo usa referencias y solicitudes con sufijo aleatorio por corrida: repetirlo sobre la misma base no altera las cifras de stock que verifica.
+- La consulta del microfrontend presenta los campos escalares de la respuesta en una tabla y traduce sus nombres a etiquetas legibles; el contrato no define una proyección visual específica.

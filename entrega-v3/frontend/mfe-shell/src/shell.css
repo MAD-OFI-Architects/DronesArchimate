@@ -1,0 +1,18 @@
+/* Tokens del sistema de diseño: los remotes (Shadow DOM) los heredan como custom properties. */
+:root{--mfe-font:Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;--mfe-bg:#f4f6fa;--mfe-surface:#fff;--mfe-text:#1b2430;--mfe-muted:#5b6776;
+--mfe-border:#dde3ea;--mfe-primary:#1d4ed8;--mfe-primary-contrast:#fff;--mfe-focus:rgba(29,78,216,.28);--mfe-danger:#b42318;--mfe-danger-bg:#fdecea;
+--mfe-success:#05603a;--mfe-success-bg:#e7f6ec;--mfe-badge-bg:#e0e9ff;--mfe-radius:12px;--mfe-gap:1.25rem;--mfe-shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
+color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--mfe-bg:#0e1420;--mfe-surface:#161e2e;--mfe-text:#e6ebf2;--mfe-muted:#9aa7b8;--mfe-border:#2a3548;--mfe-primary:#6c9bff;
+--mfe-primary-contrast:#0b1220;--mfe-focus:rgba(108,155,255,.35);--mfe-danger:#ff8a80;--mfe-danger-bg:#3a1d1b;--mfe-success:#7ee2a8;--mfe-success-bg:#12301f;--mfe-badge-bg:#1e2f57}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--mfe-bg);color:var(--mfe-text);font-family:var(--mfe-font);line-height:1.5}
+.shell-header{position:sticky;top:0;z-index:10;display:flex;flex-wrap:wrap;gap:.75rem 1.5rem;align-items:center;justify-content:space-between;padding:.75rem clamp(1rem,4vw,2rem);
+background:var(--mfe-surface);border-bottom:1px solid var(--mfe-border)}
+.brand{display:flex;align-items:center;gap:.6rem;font-weight:700;font-size:1.05rem}.brand i{display:inline-grid;place-items:center;width:2rem;height:2rem;border-radius:9px;background:var(--mfe-primary);color:var(--mfe-primary-contrast);font-style:normal}
+.role{display:flex;align-items:center;gap:.6rem;font-size:.85rem;color:var(--mfe-muted)}
+.role select{font:inherit;color:var(--mfe-text);background:var(--mfe-bg);border:1px solid var(--mfe-border);border-radius:8px;padding:.45rem .7rem}
+.role select:focus-visible{outline:3px solid var(--mfe-focus)}
+.shell-main{max-width:76rem;margin:0 auto;padding:clamp(1rem,3vw,2rem);display:grid;gap:2rem}
+#toast{position:fixed;right:1rem;bottom:1rem;max-width:min(24rem,calc(100vw - 2rem));padding:.7rem 1rem;border-radius:10px;background:var(--mfe-text);color:var(--mfe-bg);box-shadow:0 8px 24px rgba(0,0,0,.25)}
+[hidden]{display:none!important}

@@ -52,17 +52,21 @@ export function CommandForm({ titulo, segmento, campos, identificadores = [], si
   const [ordenId, setOrdenId] = useState('');
   const [valores, setValores] = useState<Record<string, Valor>>({});
   const [errores, setErrores] = useState<string[]>([]);
+  const [erroresPorCampo, setErroresPorCampo] = useState<Record<string, string>>({});
   const [fallo, setFallo] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setFallo(null);
+    setErroresPorCampo({});
+    const erroresCampos = Object.fromEntries(campos.map((c) => [c.nombre, validar(c, valores[c.nombre] ?? '')]).filter(([, error]) => error !== null)) as Record<string, string>;
     const invalidos = [
       ...(GUID.test(ordenId.trim()) ? [] : ['El identificador de la orden debe ser un GUID válido.']),
-      ...campos.map((c) => validar(c, valores[c.nombre] ?? '')).filter((m): m is string => m !== null),
+      ...Object.values(erroresCampos),
     ];
     setErrores(invalidos);
+    setErroresPorCampo(erroresCampos);
     if (invalidos.length > 0) return;
     const cuerpo: Record<string, unknown> = Object.fromEntries(campos.map((c) => [c.nombre, convertir(c, valores[c.nombre] ?? '')]));
     identificadores.forEach((n) => { cuerpo[n] = crypto.randomUUID(); });
@@ -78,17 +82,21 @@ export function CommandForm({ titulo, segmento, campos, identificadores = [], si
   }
 
   return (
-    <form onSubmit={onSubmit} aria-label={titulo} noValidate>
+    <section className="card">
+      <form onSubmit={onSubmit} aria-label={titulo} noValidate>
       <h3>{titulo}</h3>
-      <label>Identificador de la orden<input value={ordenId} onChange={(e) => setOrdenId(e.target.value)} /></label>
+      <label className="field">Identificador de la orden
+        <input aria-invalid={errores.some((error) => error.includes('identificador'))} value={ordenId} onChange={(e) => setOrdenId(e.target.value)} />
+      </label>
       {campos.map((c) => c.tipo === 'si-no' ? (
-        <label key={c.nombre} className="check">
+        <label key={c.nombre} className="field check">
           <input type="checkbox" checked={valores[c.nombre] === true} onChange={(e) => setValores({ ...valores, [c.nombre]: e.target.checked })} />
           {c.etiqueta}
         </label>
       ) : (
-        <label key={c.nombre}>{c.etiqueta}
+        <label key={c.nombre} className="field">{c.etiqueta}
           <input
+            aria-invalid={Boolean(erroresPorCampo[c.nombre])}
             type={c.tipo === 'numero' ? 'number' : c.tipo === 'fecha-hora' ? 'datetime-local' : 'text'}
             min={c.min}
             step={c.paso}
@@ -97,9 +105,10 @@ export function CommandForm({ titulo, segmento, campos, identificadores = [], si
           />
         </label>
       ))}
-      <button type="submit" disabled={enviando}>{titulo}</button>
+      <button type="submit" disabled={enviando}>{enviando ? 'Enviando…' : titulo}</button>
       {errores.length > 0 && <ul role="alert">{errores.map((m) => <li key={m}>{m}</li>)}</ul>}
       {fallo && <p role="alert">{fallo}</p>}
-    </form>
+      </form>
+    </section>
   );
 }

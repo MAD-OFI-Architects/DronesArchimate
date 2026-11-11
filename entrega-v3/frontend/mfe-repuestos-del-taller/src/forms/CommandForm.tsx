@@ -16,6 +16,7 @@ export function CommandForm({ titulo, campos, campoRuta, ruta, camposCuerpo }: C
   const [valores, setValores] = useState<Record<string, string>>({});
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false);
 
   function validar(): Record<string, string> {
     const faltan: Record<string, string> = {};
@@ -38,25 +39,30 @@ export function CommandForm({ titulo, campos, campoRuta, ruta, camposCuerpo }: C
       return [n, c.type === 'number' ? Number(valores[n]) : valores[n].trim()];
     }));
     try {
+      setEnviando(true);
       await send('POST', ruta(campoRuta ? valores[campoRuta].trim() : ''), camposCuerpo.length ? cuerpo : undefined);
       notify(`${titulo}: listo`);
     } catch (err) {
       setError(mensajeDeError(err));
+    } finally {
+      setEnviando(false);
     }
   }
 
   return (
-    <form onSubmit={onSubmit} aria-label={titulo} noValidate>
-      <h3>{titulo}</h3>
+    <section className="card">
+      <form onSubmit={onSubmit} aria-label={titulo} noValidate>
+        <h3>{titulo}</h3>
       {campos.map((c) => (
-        <label key={c.name}>{c.label}
+        <label className="field" key={c.name}>{c.label}
           <input type={c.type} min={c.min} value={valores[c.name] ?? ''} aria-invalid={!!errores[c.name]}
             onChange={(e) => setValores({ ...valores, [c.name]: e.target.value })} />
           {errores[c.name] && <span role="alert">{errores[c.name]}</span>}
         </label>
       ))}
-      <button type="submit">{titulo}</button>
-      {error && <p role="alert">{error}</p>}
-    </form>
+        <button className="btn" type="submit" disabled={enviando}>{enviando ? 'Enviando…' : titulo}</button>
+        {error && <p role="alert" className="alert">{error}</p>}
+      </form>
+    </section>
   );
 }

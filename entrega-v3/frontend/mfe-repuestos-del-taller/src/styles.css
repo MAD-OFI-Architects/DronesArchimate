@@ -1,1 +1,29 @@
-:host{display:block;font-family:system-ui,sans-serif}form{display:grid;gap:.6rem;max-width:34rem;margin:1rem 0}label{display:grid;gap:.2rem;font-weight:600}input,select,textarea,button{font:inherit;padding:.45rem}button{cursor:pointer}[role=alert]{color:#b00020}
+/* Sistema de diseño compartido: el shell define los tokens --mfe-* en :root y atraviesan el Shadow DOM.
+   Los valores de respaldo permiten ejecutar el remote solo (vite dev). Vocabulario de clases: card, field, btn, alert, table, badge, empty. */
+:host{display:block;font-family:var(--mfe-font,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif);color:var(--mfe-text,#1b2430);line-height:1.5}
+*{box-sizing:border-box}
+.mfe{display:grid;gap:var(--mfe-gap,1.25rem)}
+.mfe-title{margin:0;font-size:1.35rem;font-weight:700;letter-spacing:-.01em}
+.mfe-sub{margin:.15rem 0 0;color:var(--mfe-muted,#5b6776);font-size:.9rem}
+.grid{display:grid;gap:var(--mfe-gap,1.25rem);grid-template-columns:repeat(auto-fill,minmax(min(100%,22rem),1fr));align-items:start}
+.card{background:var(--mfe-surface,#fff);border:1px solid var(--mfe-border,#dde3ea);border-radius:var(--mfe-radius,12px);box-shadow:var(--mfe-shadow,0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08));padding:1.1rem 1.25rem}
+.card h3{margin:0 0 .75rem;font-size:1.02rem;font-weight:650}
+form{display:grid;gap:.85rem}
+.field{display:grid;gap:.3rem;font-size:.9rem;font-weight:600}
+.field small{font-weight:400;color:var(--mfe-muted,#5b6776)}
+input,select,textarea{font:inherit;color:inherit;width:100%;padding:.55rem .7rem;background:var(--mfe-bg,#f6f8fb);border:1px solid var(--mfe-border,#dde3ea);border-radius:8px;transition:border-color .15s,box-shadow .15s}
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none;border-color:var(--mfe-primary,#1d4ed8);box-shadow:0 0 0 3px var(--mfe-focus,rgba(29,78,216,.25))}
+input[aria-invalid=true],textarea[aria-invalid=true]{border-color:var(--mfe-danger,#b42318)}
+.check{display:flex;align-items:center;gap:.5rem;font-weight:500}.check input{width:auto}
+.btn,button{font:inherit;font-weight:600;cursor:pointer;padding:.6rem 1rem;border:0;border-radius:8px;background:var(--mfe-primary,#1d4ed8);color:var(--mfe-primary-contrast,#fff);justify-self:start;transition:filter .15s,transform .05s}
+.btn:hover,button:hover:not(:disabled){filter:brightness(1.08)}.btn:active,button:active:not(:disabled){transform:translateY(1px)}
+button:focus-visible{outline:3px solid var(--mfe-focus,rgba(29,78,216,.45));outline-offset:2px}
+button:disabled{opacity:.55;cursor:progress}
+.btn-ghost{background:transparent;color:var(--mfe-primary,#1d4ed8);border:1px solid var(--mfe-border,#dde3ea)}
+.alert,[role=alert]{margin:0;padding:.6rem .8rem;border-radius:8px;font-size:.9rem;background:var(--mfe-danger-bg,#fdecea);color:var(--mfe-danger,#b42318);border:1px solid var(--mfe-danger,#b42318)}
+.ok{padding:.6rem .8rem;border-radius:8px;background:var(--mfe-success-bg,#e7f6ec);color:var(--mfe-success,#05603a)}
+.table{width:100%;border-collapse:collapse;font-size:.9rem}.table th,.table td{text-align:left;padding:.5rem .6rem;border-bottom:1px solid var(--mfe-border,#dde3ea)}
+.table th{color:var(--mfe-muted,#5b6776);font-weight:600;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em}
+.badge{display:inline-block;padding:.1rem .55rem;border-radius:999px;font-size:.75rem;font-weight:650;background:var(--mfe-badge-bg,#e0e9ff);color:var(--mfe-primary,#1d4ed8)}
+.empty{padding:1.2rem;text-align:center;color:var(--mfe-muted,#5b6776);border:1px dashed var(--mfe-border,#dde3ea);border-radius:var(--mfe-radius,12px)}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:.35rem 1rem;margin:0}dt{font-weight:600;color:var(--mfe-muted,#5b6776)}dd{margin:0}

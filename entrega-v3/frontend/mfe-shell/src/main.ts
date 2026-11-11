@@ -1,3 +1,5 @@
+import './shell.css';
+
 interface Entry { tag: string; module: string; context: string; roles: string[] }
 const outlet = document.getElementById('outlet')!;
 const select = document.getElementById('role') as HTMLSelectElement;

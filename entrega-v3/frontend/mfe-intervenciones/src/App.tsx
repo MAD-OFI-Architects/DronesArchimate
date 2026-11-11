@@ -20,10 +20,12 @@ const FORMS: { roles: string[]; node: JSX.Element }[] = [
 /** `role` llega del shell (atributo data-role); vacío = todos los formularios de «Intervenciones». */
 export function App({ role }: { role: string }) {
   return (
-    <main>
-      <h2>Intervenciones{role ? ` · ${role}` : ''}</h2>
-      <OrdenDeTrabajoConsulta />
-      {FORMS.filter((f) => !role || f.roles.includes(role)).map((f) => f.node)}
+    <main className="mfe">
+      <h2 className="mfe-title">Intervenciones{role ? ` · ${role}` : ''}</h2>
+      <div className="grid">
+        <OrdenDeTrabajoConsulta />
+        {FORMS.filter((f) => !role || f.roles.includes(role)).map((f) => f.node)}
+      </div>
     </main>
   );
 }
