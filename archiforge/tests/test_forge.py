@@ -94,7 +94,7 @@ def test_catalog_is_neutral_reference_without_evaluation_flags():
 
 
 def test_decisions_roundtrip_and_validation(tmp_path):
-    c = dataclasses.replace(config.load(ROOT / "forge.toml"), decisions_dir=tmp_path)
+    c = dataclasses.replace(config.load(ROOT / "forge.toml"), decisions_dir=tmp_path, policy={})     # el forge.toml real declara [policy]: aquí se prueba sin ella
     d = dom(patterns={"pipeline": {"usar": True}})            # pipeline requiere cqrs
     errors, _ = decisions.validate(c, d)
     assert any("cqrs" in e for e in errors)
