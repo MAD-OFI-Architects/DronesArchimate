@@ -14,8 +14,8 @@ Rama: main (commits por slice, sin push) · Estrategia de entrega: ask-on-risk �
 - [x] T1 (S4,S5) Credenciales y entorno del agente (`forge/credentials.py`, env en `agents.run_agent`/`Runner`) — inline
 - [x] T2 (S1,S2,S5) Proyectos: modelo, registro, `forge.toml` generado, `tool_root` separado de la raíz del proyecto — inline
 - [x] T3 (S1,S5) Servicio de estudio sin UI: dominios+estado, advise, guardar decisión, construir con callbacks de log, ensamblar — inline
-- [ ] T4 (S1,S3,S4) App Textual: pantallas Proyecto, Dominios, Decisión, Agente/Tokens, Construcción, Ensamblado — inline
-- [ ] T5 (S3) Verificación headless con el pilot de Textual y revisión visual; README y `forge studio` como comando
+- [x] T4 (S1,S3,S4) App Textual: pantallas Proyecto, Dominios, Decisión, Agente/Tokens, Construcción, Ensamblado — inline
+- [x] T5 (S3) Verificación headless con el pilot de Textual y revisión visual; README y `forge studio` como comando
 
 ## Log
 - L1 (2026-11-11) "Hagamos entonces la TUI que quede bien bonita por favor"
@@ -25,3 +25,7 @@ Rama: main (commits por slice, sin push) · Estrategia de entrega: ask-on-risk �
 - T1-T3 verificadas: 63 pruebas en verde (antes 34). Bug cazado por prueba: el borrador proponía `pipeline` sin `cqrs`; ahora arrastra dependencias.
 - Risk T1: item 2 (credenciales). Verificación: revisión propia (sin verificador independiente: el usuario rechazó subagentes); comprobado a mano que el token no aparece en argv, cabecera del log ni errores; permisos 600/700 con prueba.
 - Risk T2/T3: item 3 leve (Config.docs_dir ahora opcional, Runner/build_one con parámetros opcionales; el CLI no cambia).
+- T4/T5 verificadas: 73 pruebas (10 de TUI con el pilot de Textual: nuevo proyecto con análisis de modelo, decisiones con bloqueo de patrones exigidos, tokens enmascarados/borrados, motor y modelo, construir con log en vivo y fallo controlado, ensamblar sin dominios). Revisión visual con capturas SVG->PNG (6 pantallas) y arranque en pty real con Ctrl+Q (código 0, sin traceback).
+- Mutación: romper el enmascarado de tokens hace fallar 2 pruebas (UI y servicio). Romper la validación de la pantalla de decisión no falla porque `Studio.save` también valida (defensa en profundidad).
+- Pendiente (A1): desacoplar el generador del modelo concreto de Drones; Postman; mirror en Engram (no guardado: pendiente).
+- Risk T4/T5: none (código nuevo, aditivo; el CLI existente no cambia salvo el subcomando `studio`).

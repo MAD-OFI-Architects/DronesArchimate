@@ -281,6 +281,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("-c", "--config", default="forge.toml")
     ap.add_argument("-d", "--domain", help="dominio (para next/gate/prepare/bootstrap/status/render/report)")
     sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("studio", help="abre la TUI (ArchiForge Studio): proyectos, decisiones, agente y tokens, construir y ensamblar")
     sub.add_parser("doctor", help="verifica herramientas e insumos")
     sub.add_parser("domains", help="contextos del ArchiMate, cuáles están decididos y cómo va cada uno")
     ad = sub.add_parser("advise", help="recomienda patrones para un dominio según el modelo (NO decide)")
@@ -314,6 +315,13 @@ def main(argv: list[str] | None = None) -> int:
     ia = sub.add_parser("install-agents", help="[modo nativo] genera agentes y comandos /forge, /forge-design para Claude Code y/o OpenCode")
     ia.add_argument("--target", choices=["claude", "opencode", "both"], default="both")
     a = ap.parse_args(argv)
+    if a.cmd == "studio":                  # la TUI no necesita un forge.toml: crea y gestiona sus propios proyectos
+        try:
+            from .studio.ui.app import run
+        except ModuleNotFoundError as e:
+            raise SystemExit(f"La TUI necesita Textual ({e.name}). Instálalo con: pip install -r requirements.txt") from e
+        run()
+        return 0
     cfg = config.load(Path(a.config))
 
     if a.cmd == "install-agents":

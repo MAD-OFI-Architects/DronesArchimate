@@ -165,8 +165,11 @@ class Studio:
         """Lo que la evaluación pide del CONJUNTO de dominios decididos (lenguajes distintos, arquitecturas mezcladas…)."""
         from .. import gates as G
         names = [c["name"] for c in self.ir["contexts"]]
-        return [f"{'✓' if g.ok else '✗'} {g.name}: {g.detail.splitlines()[0] if g.detail else ''}"
-                for g in G.portfolio_gates(self.cfg, self.cfg.domains, names)]
+        out = []
+        for g in G.portfolio_gates(self.cfg, self.cfg.domains, names):
+            name = g.name.removeprefix("evaluación: ")
+            out.append(f"✓ {name}" if g.ok else f"✗ {name}: {g.detail.splitlines()[0] if g.detail else ''}")
+        return out
 
     # ------------------------------------------------------------- herramientas y agente
     def tool_checks(self, domains: list[Domain] | None = None):

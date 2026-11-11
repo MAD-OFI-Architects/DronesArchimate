@@ -3,7 +3,21 @@
 Tú eres el arquitecto: **decides** lenguaje, base de datos, arquitectura interna, estilo de servicio y patrones.
 ArchiForge **aconseja** (según el modelo ArchiMate) y **ejecuta con fidelidad a tus decisiones**, verificándolas con puertas automáticas.
 
-## Flujo (3 pasos por dominio)
+## ArchiForge Studio (TUI) — la forma cómoda
+```
+pip install -r requirements.txt
+python -m forge studio
+```
+Sin escribir archivos de configuración: **Nuevo proyecto** (eliges tu `.archimate` y la TUI te dice al instante qué entiende de él),
+**Dominios** (decides lenguaje, arquitectura, BD y patrones con las recomendaciones al lado), **Agente y tokens** (motor `opencode`/`claude`/propio,
+modelo y tokens de API), **Construir** (progreso por etapa y log en vivo) y **Ensamblar**. Teclas: `n` nuevo · `Enter` abrir/decidir · `b` construir ·
+`a` ensamblar · `g` agente y tokens · `Esc` volver · `Ctrl+Q` salir.
+- Los tokens se guardan en `~/.config/archiforge/credentials.json` (permisos 600), **fuera del proyecto y de git**, y llegan al agente solo por variables de entorno.
+- Cada proyecto vive en `projects/<nombre>/` (su `forge.toml` lo genera la TUI); el proyecto actual del repo se importa solo la primera vez.
+- Límite honesto: un `.archimate` ajeno solo sirve si sigue las convenciones de modelado de ArchiForge (agregados con rol Raíz, «Dominio: …», comandos y
+  eventos). La TUI lo comprueba y explica qué falta; desacoplar el generador de este modelo concreto es trabajo pendiente.
+
+## Flujo por comandos (3 pasos por dominio)
 1. **Diseñar** (conversación con el agente): en Claude Code `/forge-design "Intervenciones"`; en OpenCode igual.
    El agente corre `forge advise`, te explica qué patrones conviene usar (y cuáles no, para no sobreingenierizar), te pregunta y guarda `decisiones/<dominio>.toml`.
    Sin agente: `python -m forge advise "X"` y luego `python -m forge decide "X" --lang java --arch hexagonal --style soa --db postgresql --patterns cqrs,memento,!state --why lenguaje="…"`. También puedes editar el TOML a mano.
