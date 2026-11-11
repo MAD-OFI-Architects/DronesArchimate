@@ -47,7 +47,7 @@
 | Repuestos del Taller | application | command_handler | `LiberarReservaManejador` | id-71639f81a7d15643b5004c9e7be7d0d3 | services/repuestos-del-taller/src/repuestos_del_taller/application/manejadores.py | ✅ |
 | Repuestos del Taller | application | validator | `LiberarReservaValidador` | id-71639f81a7d15643b5004c9e7be7d0d3 | services/repuestos-del-taller/src/repuestos_del_taller/application/validadores.py | ✅ |
 | Repuestos del Taller | api | request_model | `LiberarReservaSolicitud` | id-71639f81a7d15643b5004c9e7be7d0d3 | services/repuestos-del-taller/src/repuestos_del_taller/adapters/inbound/http/modelos.py | ✅ |
-| Repuestos del Taller | tests | test | `LiberarReservaComando` | id-71639f81a7d15643b5004c9e7be7d0d3 | services/repuestos-del-taller/tests/test_adaptadores.py | ✅ |
+| Repuestos del Taller | tests | test | `LiberarReservaComando` | id-71639f81a7d15643b5004c9e7be7d0d3 | services/repuestos-del-taller/tests/test_aplicacion.py | ✅ |
 | Repuestos del Taller | application | command | `ConfirmarConsumoComando` | id-f414f0d49cb55d5c82f5ca2fcf9f010e | services/repuestos-del-taller/src/repuestos_del_taller/application/comandos.py | ✅ |
 | Repuestos del Taller | application | command_handler | `ConfirmarConsumoManejador` | id-f414f0d49cb55d5c82f5ca2fcf9f010e | services/repuestos-del-taller/src/repuestos_del_taller/application/manejadores.py | ✅ |
 | Repuestos del Taller | application | validator | `ConfirmarConsumoValidador` | id-f414f0d49cb55d5c82f5ca2fcf9f010e | services/repuestos-del-taller/src/repuestos_del_taller/application/validadores.py | ✅ |
@@ -57,12 +57,12 @@
 | Repuestos del Taller | application | command_handler | `AjustarExistenciaPorConteoManejador` | id-e2ab33f62f83589d89a543f7fd6298ff | services/repuestos-del-taller/src/repuestos_del_taller/application/manejadores.py | ✅ |
 | Repuestos del Taller | application | validator | `AjustarExistenciaPorConteoValidador` | id-e2ab33f62f83589d89a543f7fd6298ff | services/repuestos-del-taller/src/repuestos_del_taller/application/validadores.py | ✅ |
 | Repuestos del Taller | api | request_model | `AjustarExistenciaPorConteoSolicitud` | id-e2ab33f62f83589d89a543f7fd6298ff | services/repuestos-del-taller/src/repuestos_del_taller/adapters/inbound/http/modelos.py | ✅ |
-| Repuestos del Taller | tests | test | `AjustarExistenciaPorConteoComando` | id-e2ab33f62f83589d89a543f7fd6298ff | services/repuestos-del-taller/tests/test_adaptadores.py | ✅ |
+| Repuestos del Taller | tests | test | `AjustarExistenciaPorConteoComando` | id-e2ab33f62f83589d89a543f7fd6298ff | services/repuestos-del-taller/tests/test_aplicacion.py | ✅ |
 | Repuestos del Taller | application | command | `SolicitarReposicionComando` | id-ba820033885b5e5c8de028b7d471ac2f | services/repuestos-del-taller/src/repuestos_del_taller/application/comandos.py | ✅ |
 | Repuestos del Taller | application | command_handler | `SolicitarReposicionManejador` | id-ba820033885b5e5c8de028b7d471ac2f | services/repuestos-del-taller/src/repuestos_del_taller/application/manejadores.py | ✅ |
 | Repuestos del Taller | application | validator | `SolicitarReposicionValidador` | id-ba820033885b5e5c8de028b7d471ac2f | services/repuestos-del-taller/src/repuestos_del_taller/application/validadores.py | ✅ |
 | Repuestos del Taller | api | request_model | `SolicitarReposicionSolicitud` | id-ba820033885b5e5c8de028b7d471ac2f | services/repuestos-del-taller/src/repuestos_del_taller/adapters/inbound/http/modelos.py | ✅ |
-| Repuestos del Taller | tests | test | `SolicitarReposicionComando` | id-ba820033885b5e5c8de028b7d471ac2f | services/repuestos-del-taller/tests/test_adaptadores.py | ✅ |
+| Repuestos del Taller | tests | test | `SolicitarReposicionComando` | id-ba820033885b5e5c8de028b7d471ac2f | services/repuestos-del-taller/tests/test_aplicacion.py | ✅ |
 | Repuestos del Taller | application | command | `AprobarSolicitudComando` | id-419859743da258ec9e9e5edf83faf4ce | services/repuestos-del-taller/src/repuestos_del_taller/application/comandos.py | ✅ |
 | Repuestos del Taller | application | command_handler | `AprobarSolicitudManejador` | id-419859743da258ec9e9e5edf83faf4ce | services/repuestos-del-taller/src/repuestos_del_taller/application/manejadores.py | ✅ |
 | Repuestos del Taller | application | validator | `AprobarSolicitudValidador` | id-419859743da258ec9e9e5edf83faf4ce | services/repuestos-del-taller/src/repuestos_del_taller/application/validadores.py | ✅ |
@@ -72,9 +72,9 @@
 | Repuestos del Taller | application | command_handler | `CancelarSolicitudManejador` | id-c8dbdeffe37751e7b00d73efc5c5c9c9 | services/repuestos-del-taller/src/repuestos_del_taller/application/manejadores.py | ✅ |
 | Repuestos del Taller | application | validator | `CancelarSolicitudValidador` | id-c8dbdeffe37751e7b00d73efc5c5c9c9 | services/repuestos-del-taller/src/repuestos_del_taller/application/validadores.py | ✅ |
 | Repuestos del Taller | api | request_model | `CancelarSolicitudSolicitud` | id-c8dbdeffe37751e7b00d73efc5c5c9c9 | services/repuestos-del-taller/src/repuestos_del_taller/adapters/inbound/http/modelos.py | ✅ |
-| Repuestos del Taller | tests | test | `CancelarSolicitudComando` | id-c8dbdeffe37751e7b00d73efc5c5c9c9 | services/repuestos-del-taller/tests/test_adaptadores.py | ✅ |
+| Repuestos del Taller | tests | test | `CancelarSolicitudComando` | id-c8dbdeffe37751e7b00d73efc5c5c9c9 | services/repuestos-del-taller/tests/test_aplicacion.py | ✅ |
 | Repuestos del Taller | contracts | published_contract | `FaltanteDetectadoV1` | Faltante detectado | services/repuestos-del-taller/src/repuestos_del_taller/contracts/eventos.py | ✅ |
-| Repuestos del Taller | application | event_translator | `FaltanteDetectadoTraductor` | Faltante detectado | services/repuestos-del-taller/src/repuestos_del_taller/application/integracion.py | ✅ |
+| Repuestos del Taller | application | event_translator | `FaltanteDetectadoTraductor` | Faltante detectado | services/repuestos-del-taller/src/repuestos_del_taller/application/traductores.py | ✅ |
 | Repuestos del Taller | contracts | topics | `RepuestosDelTallerTopicos` | Repuestos del Taller | services/repuestos-del-taller/src/repuestos_del_taller/contracts/topicos.py | ✅ |
 | Repuestos del Taller | application | event_consumer | `ParadaProgramadaConsumidor` | Parada programada | services/repuestos-del-taller/src/repuestos_del_taller/application/integracion.py | ✅ |
 | Repuestos del Taller | application | event_consumer | `OrdenDeTrabajoCerradaConsumidor` | Orden de trabajo cerrada | services/repuestos-del-taller/src/repuestos_del_taller/application/integracion.py | ✅ |

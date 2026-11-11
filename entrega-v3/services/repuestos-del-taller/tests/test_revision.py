@@ -1,14 +1,19 @@
 """Regresiones de la revisión independiente (S50)."""
 import asyncio
 import json
+import sqlite3
+import sys
+import types
+import uuid
 
 
-from repuestos_del_taller.adapters.inbound.http.composicion import RepuestosDelTallerComposicion
+from repuestos_del_taller.adapters.inbound.http.composicion import RepuestosDelTallerComposicion, _repositorios
 from repuestos_del_taller.adapters.outbound.persistencia import (
-    RepositorioExistencia, RepositorioSolicitudDeReposicion,
+    RepositorioExistencia, RepositorioExistenciaSql, RepositorioSolicitudDeReposicion,
+    RepositorioSolicitudDeReposicionSql,
 )
 from repuestos_del_taller.application.comandos import (
-    AprobarSolicitudComando, ConfirmarConsumoComando, RegistrarEntradaDeRepuestoComando,
+    AprobarSolicitudComando, ConfirmarConsumoComando, SolicitarReposicionComando, RegistrarEntradaDeRepuestoComando,
     ReservarRepuestoComando,
 )
 from repuestos_del_taller.application.integracion import StockMinimoAlcanzadoObservador
@@ -73,3 +78,35 @@ def test_reservar_por_http_publica_el_faltante() -> None:
     cliente.post("/api/existencia", {"referencia": "R-1", "cantidad": 1, "stock_minimo": 0, "plazo_dias": 1})
     assert cliente.post("/api/existencia/R-1/reservar-repuesto", {"orden_trabajo_id": "OT-9", "cantidad": 5}) == 409
     assert publicados == ["repuestos-del-taller.faltante-detectado.v1"]
+
+
+class _ConexionSqlite:
+    """sqlite3 con la interfaz de psycopg (`execute` + marcadores %s) para probar el SQL real sin servidor."""
+
+    def __init__(self): self._c = sqlite3.connect(":memory:", check_same_thread=False)
+
+    def execute(self, sql, params=()): return self._c.execute(sql.replace("%s", "?"), params)
+
+
+def test_repositorios_sql_persisten_y_restauran_los_agregados():
+    conexion = _ConexionSqlite()
+    existencias = RepositorioExistenciaSql(conexion); solicitudes = RepositorioSolicitudDeReposicionSql(conexion)
+    RegistrarEntradaDeRepuestoManejador(existencias).manejar(RegistrarEntradaDeRepuestoComando("R-9", 5, 1, 2))
+    ReservarRepuestoManejador(existencias).manejar(ReservarRepuestoComando("R-9", "OT-1", 2))
+    reiniciado = RepositorioExistenciaSql(conexion).por_referencia("R-9")
+    assert reiniciado.crear_memento() == existencias.por_referencia("R-9").crear_memento()
+    assert reiniciado.crear_memento().reservas[0].cantidad == 2 and existencias.por_referencia("nada") is None
+    s = SolicitarReposicionManejador(solicitudes).manejar(SolicitarReposicionComando("R-9", 3, 100, str(uuid.uuid4())))
+    assert solicitudes.por_id(s.id).crear_memento() == s.crear_memento()
+    assert solicitudes.abierta_de_referencia("R-9").id == s.id and solicitudes.abierta_de_referencia("R-0") is None
+    s.cancelar(); solicitudes.guardar(s)
+    assert solicitudes.abierta_de_referencia("R-9") is None
+
+
+def test_database_url_selecciona_el_repositorio_sql(monkeypatch):
+    conexion = _ConexionSqlite()
+    fake = types.SimpleNamespace(connect=lambda url, autocommit: conexion if url == "postgresql://x" else None)
+    monkeypatch.setitem(sys.modules, "psycopg", fake)
+    existencias, solicitudes = _repositorios("postgresql://x")
+    assert isinstance(existencias, RepositorioExistenciaSql) and isinstance(solicitudes, RepositorioSolicitudDeReposicionSql)
+    assert isinstance(_repositorios("")[0], RepositorioExistencia)

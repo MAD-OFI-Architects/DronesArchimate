@@ -1,11 +1,8 @@
-- El gateway expone la salud como `/api/repuestos/health`, porque su proxy traduce `/api/repuestos/` a `/api/`.
-- El simulador emite eventos en `/sim/simulate/{contexto}/{evento}`; `/sim/` es el prefijo del gateway.
-- La reserva de una parada se identifica por `paradaId`; la OT cerrada usa ese mismo id para confirmar el consumo.
-- Una parada con faltante se da por procesada (el manejador ya publicó Faltante detectado): devolver error haría que el bus reintente y duplique el aviso.
-- El publicador de eventos envía el sobre completo del contrato (`eventId`, `topic`, `occurredOn`, `correlationId`, `payload`); el `eventId` del evento de dominio sale del `payload`.
-- El estado del servicio vive en memoria: para repetir el humo desde cero se reinicia con `docker compose restart repuestos-del-taller`.
-- MFE: las rutas usan `referencia`/`solicitud_id` (parámetros reales del servicio) en lugar de `{id}` del manifiesto. Por qué: el servicio expone esas rutas.
-- MFE: los errores se leen de `regla` y, si falta, de `error` (el servicio actual responde `{"error": ...}`). Por qué: mostrar siempre un mensaje claro.
-- MFE: `vite.config.ts` fija NODE_ENV=production solo en build, no en test. Por qué: React de producción no soporta `act` en Testing Library.
-- La política «Stock mínimo alcanzado → Solicitar reposición» crea la solicitud con cantidad 1 y monto 0. Por qué: el modelo no define cantidad ni monto.
-- Aprobar una solicitud pasa la existencia de `bajo_minimo` a `reponiendo`. Por qué: el State decidido lo pide y el modelo no indica otra señal.
+# Supuestos de diseño — Repuestos del Taller
+
+- Los campos de los eventos entre contextos son supuestos (ver `contrato-bus.md`): el modelo ArchiMate no los define.
+- La bandeja de salida es en memoria y guarda cada evento cifrado con `CifradorAes` (los avisos pueden llevar datos de contacto); el destinatario del aviso de reposición es «compras» por defecto.
+- Solo `Faltante detectado` tiene contrato publicado (`FaltanteDetectadoV1`): los manejadores escriben en la bandeja únicamente eventos con traductor; el resto de eventos de dominio se descarta tras guardar el agregado.
+- Los consumidores deduplican por `eventId` en memoria; el modelo no define un almacén de mensajes procesados.
+- Esquema PostgreSQL: dos tablas (`existencia`, `solicitud_de_reposicion`) que guardan el memento del agregado como JSON; se crean al iniciar (`CREATE TABLE IF NOT EXISTS`), sin migraciones, por tamaño del contexto. Se prueba con sqlite3 porque no hay servidor PostgreSQL en el entorno de revisión.
+- `CifradorAes` exige `cryptography` (ya declarada en `pyproject.toml`); se eliminó el fallback XOR+HMAC. Si `CIFRADO_CLAVE` falta usa una clave local derivada: aceptable solo en desarrollo.

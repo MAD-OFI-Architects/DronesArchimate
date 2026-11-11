@@ -11,8 +11,20 @@ from ..domain.compartido.errores import ViolacionDeReglaDeNegocio
 from ..domain.reposicion.objetos_de_valor import CantidadSolicitada
 from ..domain.reposicion.repositorio import ISolicitudDeReposicionRepository
 from ..domain.reposicion.solicitud_de_reposicion import SolicitudDeReposicion
-from .comandos import *
-from .validadores import *
+from ..domain.existencias.eventos import FaltanteDetectado
+from .comandos import (
+    AjustarExistenciaPorConteoComando, AprobarSolicitudComando, CancelarSolicitudComando,
+    ConfirmarConsumoComando, LiberarReservaComando, RegistrarEntradaDeRepuestoComando,
+    ReservarRepuestoComando, SolicitarReposicionComando,
+)
+from .puertos import IPublicadorDeEventos
+from .traductores import FaltanteDetectadoTraductor
+from .validadores import (
+    AjustarExistenciaPorConteoValidador, AprobarSolicitudValidador, CancelarSolicitudValidador,
+    ConfirmarConsumoValidador, LiberarReservaValidador, RegistrarEntradaDeRepuestoValidador,
+    ReservarRepuestoValidador, SolicitarReposicionValidador,
+)
+from ..contracts.topicos import RepuestosDelTallerTopicos
 
 
 class RegistrarEntradaDeRepuestoManejador:
@@ -27,8 +39,10 @@ class RegistrarEntradaDeRepuestoManejador:
 
 
 class ReservarRepuestoManejador:
-    def __init__(self, repositorio: IExistenciaRepository, publicador=None):
+    def __init__(self, repositorio: IExistenciaRepository, publicador: IPublicadorDeEventos | None = None,
+                 traductor: FaltanteDetectadoTraductor | None = None):
         self.repositorio = repositorio; self.publicador = publicador
+        self.traductor = traductor or FaltanteDetectadoTraductor()
     def manejar(self, comando: ReservarRepuestoComando) -> Existencia:
         ReservarRepuestoValidador().validar(comando); e = self.repositorio.por_referencia(comando.referencia)
         if e is None: raise LookupError("REFERENCIA_INEXISTENTE")
@@ -36,21 +50,15 @@ class ReservarRepuestoManejador:
             e.reservar(comando.orden_trabajo_id, Cantidad(comando.cantidad))
         except ViolacionDeReglaDeNegocio:
             self.repositorio.guardar(e)
-            self._publicar_faltante(e)
+            self._escribir_en_bandeja(e)
             raise
-        self.repositorio.guardar(e); return e
+        self.repositorio.guardar(e); self._escribir_en_bandeja(e); return e
 
-    def _publicar_faltante(self, existencia: Existencia) -> None:
-        if not self.publicador:
-            return
+    def _escribir_en_bandeja(self, existencia: Existencia) -> None:
         for evento in existencia.eventos:
-            if evento.__class__.__name__ == "FaltanteDetectado":
-                self.publicador.publicar("repuestos-del-taller.faltante-detectado.v1", {
-                    "eventId": str(evento.evento_id),
-                    "paradaId": evento.orden_trabajo_id,
-                    "referencia": evento.referencia,
-                    "cantidadFaltante": max(0, evento.solicitada - evento.disponible),
-                })
+            if isinstance(evento, FaltanteDetectado) and self.publicador:
+                self.publicador.publicar(
+                    RepuestosDelTallerTopicos.FALTANTE_DETECTADO, self.traductor.traducir(evento).a_payload())
         existencia.limpiar_eventos()
 
 

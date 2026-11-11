@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime, timezone
 from collections.abc import Callable
 
-from ...application.puertos import IEnviarAviso
+from ...application.puertos import Cifrador, IEnviarAviso, IPublicadorDeEventos
 
 
 class EnviarAvisoAdapter(IEnviarAviso):
@@ -46,23 +46,43 @@ class PublicadorDeEventosHttp:
 
 
 class BandejaDeSalida:
-    def __init__(self) -> None:
-        self._pendientes: list[dict] = []
+    """Outbox: los eventos se guardan (cifrados en reposo) y luego se despachan al bus."""
+
+    def __init__(self, cifrador: Cifrador) -> None:
+        self._cifrador = cifrador
+        self._pendientes: list[tuple[str, int]] = []
 
     def agregar(self, topico: str, payload: dict) -> None:
-        self._pendientes.append({"eventId": str(uuid.uuid4()), "topic": topico, "payload": payload, "intentos": 0})
+        item = {"eventId": payload.get("eventId") or str(uuid.uuid4()), "topic": topico, "payload": payload}
+        self._pendientes.append((self._cifrador.cifrar(json.dumps(item)), 0))
 
     def despachar(self, publicador: PublicadorDeEventosHttp, max_reintentos: int = 3) -> int:
         enviados = 0
-        for item in list(self._pendientes):
+        for entrada in list(self._pendientes):
+            cifrado, intentos = entrada
+            item = json.loads(self._cifrador.descifrar(cifrado))
+            indice = self._pendientes.index(entrada)
             try:
                 publicador.publicar(item["topic"], item["payload"])
-                self._pendientes.remove(item); enviados += 1
+                del self._pendientes[indice]; enviados += 1
             except Exception:
-                item["intentos"] += 1
-                if item["intentos"] >= max_reintentos:
-                    self._pendientes.remove(item)
+                if intentos + 1 >= max_reintentos:
+                    del self._pendientes[indice]
+                else:
+                    self._pendientes[indice] = (cifrado, intentos + 1)
         return enviados
+
+
+class PublicadorConBandeja(IPublicadorDeEventos):
+    """Publica por outbox: registra el evento en la bandeja y la despacha."""
+
+    def __init__(self, bandeja: BandejaDeSalida, publicador: PublicadorDeEventosHttp) -> None:
+        self._bandeja = bandeja
+        self._publicador = publicador
+
+    def publicar(self, topico: str, evento: dict) -> None:
+        self._bandeja.agregar(topico, evento)
+        self._bandeja.despachar(self._publicador)
 
 
 class ProcesadorDeMensajeEntrante:

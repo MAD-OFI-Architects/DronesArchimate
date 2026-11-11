@@ -460,10 +460,12 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/mfe-shell/dist /usr/share/nginx/html
 {copies}
 """, encoding="utf-8")
+    (fe / ".dockerignore").write_text("**/node_modules\n**/dist\n",
+                                      encoding="utf-8")
     (fe / "nginx.conf").write_text(_nginx(cfg), encoding="utf-8")
     (fe / "README.md").write_text("# Microfrontends\n\nShell + un remote por **dominio** (Web Components); el shell filtra por rol. "
                                   "Cada remote lo construye el equipo dueño del dominio.\n", encoding="utf-8")
-    return ["frontend/mfe-shell", "frontend/Dockerfile", "frontend/nginx.conf"]
+    return ["frontend/mfe-shell", "frontend/Dockerfile", "frontend/.dockerignore", "frontend/nginx.conf"]
 
 
 # ----------------------------------------------------------------------------- instrucciones de proyecto

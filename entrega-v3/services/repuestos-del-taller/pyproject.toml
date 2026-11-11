@@ -7,7 +7,7 @@ name = "repuestos-del-taller"
 version = "0.1.0"
 description = "Microservicio «Repuestos del Taller»: hexagonal + DDD (python)."
 requires-python = ">=3.11"
-dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.32,<1"]
+dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.32,<1", "psycopg[binary]>=3.2,<4", "cryptography>=43"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]

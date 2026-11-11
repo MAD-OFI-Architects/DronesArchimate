@@ -16,3 +16,10 @@ class Cifrador(ABC):
 
     @abstractmethod
     def descifrar(self, texto: str) -> str: ...
+
+
+class IPublicadorDeEventos(ABC):
+    """Salida de eventos de integración: la implementación los escribe en la bandeja de salida (outbox)."""
+
+    @abstractmethod
+    def publicar(self, topico: str, payload: dict) -> None: ...

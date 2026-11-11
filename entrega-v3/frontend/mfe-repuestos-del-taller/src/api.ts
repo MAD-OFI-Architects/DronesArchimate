@@ -1,5 +1,5 @@
 // Cliente HTTP común del remote. Todo pasa por el gateway (/api/<servicio>/…).
-export interface Problem { title?: string; detail?: string; regla?: string; error?: string; status?: number }
+export interface Problem { title?: string; detail?: string; regla?: string; status?: number }
 export class ApiError extends Error {
   constructor(public problem: Problem) { super(problem.detail ?? problem.title ?? 'Error'); }
 }
@@ -12,4 +12,4 @@ export async function send<T = unknown>(method: 'GET' | 'POST', path: string, bo
 }
 export const notify = (message: string) => window.dispatchEvent(new CustomEvent('mfe:notify', { detail: { message } }));
 export const mensajeDeError = (err: unknown): string =>
-  err instanceof ApiError ? (err.problem.regla ?? err.problem.error ?? err.message) : String(err);
+  err instanceof ApiError ? (err.problem.regla ?? err.message) : String(err);

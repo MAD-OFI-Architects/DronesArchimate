@@ -7,7 +7,9 @@ from repuestos_del_taller.application.comandos import (
     RegistrarEntradaDeRepuestoComando as RegistrarEntradaCommand,
     ReservarRepuestoComando as ReservarCommand,
 )
-from repuestos_del_taller.application.manejadores import *
+from repuestos_del_taller.application.manejadores import (
+    RegistrarEntradaDeRepuestoManejador, ReservarRepuestoManejador, SolicitarReposicionManejador,
+)
 
 
 def _repo(): return RepositorioCacheadoExistencia(RepositorioExistencia())
@@ -26,30 +28,6 @@ class ReservarRepuestoComando:
         try: ReservarRepuestoManejador(repo).manejar(ReservarCommand("R-1", "OT-2", 2))
         except Exception as error: assert "EXISTENCIA_INSUFICIENTE" in str(error)
         else: raise AssertionError("la reserva debía fallar")
-
-
-class LiberarReservaComando: 
-    def test_simbolo(self): assert LiberarReservaComando in globals()
-
-
-class ConfirmarConsumoComando:
-    def test_simbolo(self): assert ConfirmarConsumoComando in globals()
-
-
-class AjustarExistenciaPorConteoComando:
-    def test_simbolo(self): assert AjustarExistenciaPorConteoComando in globals()
-
-
-class SolicitarReposicionComando:
-    def test_simbolo(self): assert SolicitarReposicionComando in globals()
-
-
-class AprobarSolicitudComando:
-    def test_simbolo(self): assert AprobarSolicitudComando in globals()
-
-
-class CancelarSolicitudComando:
-    def test_simbolo(self): assert CancelarSolicitudComando in globals()
 
 
 def test_cache_y_cifrado():
@@ -77,3 +55,49 @@ class TestSobreDelBus:
         consumidor = ParadaProgramadaConsumidor(ReservarRepuestoManejador(repo))
         sobre = {"eventId": "e-1", "payload": {"paradaId": "P", "tareas": [{"repuestos": [{"referencia": "R-1", "cantidad": 3}]}]}}
         assert consumidor.consumir(sobre) is True
+
+
+class TestBandejaDeSalida:
+    def test_despacha_cifrada_y_publica_con_el_mismo_event_id(self):
+        from repuestos_del_taller.adapters.outbound.integracion import BandejaDeSalida, PublicadorConBandeja
+
+        class Bus:
+            def __init__(self): self.enviados = []
+            def publicar(self, topico, evento): self.enviados.append((topico, evento))
+
+        bus = Bus()
+        bandeja = BandejaDeSalida(CifradorAes(b"clave de pruebas"))
+        bandeja.agregar("t", {"eventId": "e-1", "x": 1})
+        assert "e-1" not in bandeja._pendientes[0][0]
+        assert bandeja.despachar(bus) == 1 and bus.enviados == [("t", {"eventId": "e-1", "x": 1})]
+        PublicadorConBandeja(bandeja, bus).publicar("t2", {"eventId": "e-2"})
+        assert bus.enviados[-1][0] == "t2"
+
+    def test_descarta_tras_agotar_reintentos(self):
+        from repuestos_del_taller.adapters.outbound.integracion import BandejaDeSalida
+
+        class BusCaido:
+            def publicar(self, topico, evento): raise OSError()
+
+        bandeja = BandejaDeSalida(CifradorAes(b"clave de pruebas"))
+        bandeja.agregar("t", {"eventId": "e-1"})
+        for _ in range(3): bandeja.despachar(BusCaido(), 3)
+        assert bandeja._pendientes == []
+
+
+def test_observador_envia_aviso_por_el_puerto_acl():
+    from repuestos_del_taller.application.integracion import StockMinimoAlcanzadoObservador
+    from repuestos_del_taller.application.puertos import IEnviarAviso
+    from repuestos_del_taller.adapters.outbound.persistencia import RepositorioSolicitudDeReposicion
+    from repuestos_del_taller.domain.existencias.eventos import StockMinimoAlcanzado
+    import dataclasses
+
+    class Aviso(IEnviarAviso):
+        def __init__(self): self.llamadas = []
+        def enviar(self, d, a, m): self.llamadas.append(d)
+
+    aviso = Aviso()
+    obs = StockMinimoAlcanzadoObservador(SolicitarReposicionManejador(RepositorioSolicitudDeReposicion()), aviso=aviso)
+    campos = {f.name: "R-1" if f.name == "referencia" else 1 for f in dataclasses.fields(StockMinimoAlcanzado) if f.init}
+    obs.observar(StockMinimoAlcanzado(**campos), str(uuid.uuid4()))
+    assert aviso.llamadas == ["compras"]

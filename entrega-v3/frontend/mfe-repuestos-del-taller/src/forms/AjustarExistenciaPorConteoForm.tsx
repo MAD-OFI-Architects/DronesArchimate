@@ -5,6 +5,12 @@ const CAMPOS: Campo[] = [
   { name: 'conteo', label: 'Conteo físico', type: 'number' },
 ];
 
-export function AjustarExistenciaPorConteoForm() {
-  return <CommandForm titulo="Ajustar existencia por conteo" campos={CAMPOS} campoRuta="referencia" ruta={(v) => `/api/repuestos/existencia/${encodeURIComponent(v)}/ajustar-existencia-por-conteo`} camposCuerpo={['conteo']} />;
-}
+export const AjustarExistenciaPorConteoForm = () => (
+  <CommandForm
+    titulo="Ajustar existencia por conteo"
+    campos={CAMPOS}
+      campoRuta="referencia"
+    ruta={(r) => `/api/repuestos/existencia/${encodeURIComponent(r)}/ajustar-existencia-por-conteo`}
+    camposCuerpo={['conteo']}
+  />
+);

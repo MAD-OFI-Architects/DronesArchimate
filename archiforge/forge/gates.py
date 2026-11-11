@@ -182,6 +182,45 @@ def arch_python(cfg: Config, slug: str) -> Gate:
     return Gate(not bad, "arquitectura (imports)", "\n".join(bad[:40]) or f"{seen} archivos respetan la hexagonal.")
 
 
+DEFINICION_PY = re.compile(r"^class\s+([A-Za-z_]\w*)\s*(?:\(([^)]*)\))?", re.M)
+DEFINICION_CS = re.compile(r"^\s*(?:public|internal)?\s*(?:sealed\s+|partial\s+|static\s+)*class\s+([A-Za-z_]\w*)\s*(?::([^\n{]*))?", re.M)
+SALIDA_PY = re.compile(r"/adapters/outbound/")
+SALIDA_CS = re.compile(r"/(?:[^/]+\.)?Infrastructure/")
+
+
+def wiring_gate(cfg: Config, d) -> Gate:
+    """Un adaptador que nadie instancia es un patrón de adorno: existe para la diapositiva, no para el sistema.
+
+    Revisa solo la capa de salida (adapters/outbound en Python, *.Infrastructure en C#), que es donde viven
+    persistencia, cifrado, caché, bus y ACL. Los adaptadores de entrada quedan fuera a propósito: los invoca el
+    framework HTTP, así que no se referencian desde otro archivo. Toda clase concreta de salida debe nombrarse
+    desde un archivo de producción distinto al suyo; una clase que solo aparece en su propio archivo o en los
+    tests es código muerto que finge cumplir un patrón.
+    """
+    root = _svc(cfg, d.slug)
+    es_py = d.language == "python"
+    ext, patron, salida = (".py", DEFINICION_PY, SALIDA_PY) if es_py else (".cs", DEFINICION_CS, SALIDA_CS)
+    todos = list(conformance._files(root, {ext}))
+    archivos = [f for f in todos if salida.search(f.as_posix())]
+    if not archivos:
+        return Gate(True, "cableado de adaptadores", f"{root} todavía no tiene adaptadores de salida.")
+    textos = {f: f.read_text(encoding="utf-8", errors="ignore") for f in todos}
+    muertos = []
+    for f in archivos:
+        for nombre, padres in patron.findall(textos[f]):
+            if nombre.startswith("_") or "abstract" in padres or "ABC" in padres or "Protocol" in padres:
+                continue
+            if nombre.endswith(("Base", "Memento", "Exception")) or nombre.startswith(("RelojSimulado",)):
+                continue
+            usado = any(otro != f and "/tests/" not in otro.as_posix() and re.search(rf"\b{nombre}\b", texto)
+                        for otro, texto in textos.items())
+            if not usado:
+                muertos.append(f"{f.relative_to(root).as_posix()}: «{nombre}» no se instancia ni se referencia fuera de su archivo.")
+    detalle = "\n".join(sorted(muertos)[:20])
+    return Gate(not muertos, "cableado de adaptadores",
+                detalle or f"{len(archivos)} archivos de adaptadores de salida: todo lo definido se usa.")
+
+
 def _is_local(root: Path, top: str) -> bool:
     return any((root / base / top).exists() or (root / base / f"{top}.py").exists() for base in ("", "src"))
 
@@ -227,9 +266,11 @@ def build_gates(cfg: Config, d, layers: set[str] | None, label: str) -> list[Gat
     if d.language == "csharp":
         g += [dotnet_build(cfg, d.slug), dotnet_test(cfg, d.slug), arch_csproj(cfg, d.slug)]
     elif d.language == "python":
-        g += [pytest_gate(cfg, d.slug), arch_python(cfg, d.slug)]
+        g += [pytest_gate(cfg, d.slug), arch_python(cfg, d.slug), wiring_gate(cfg, d)]
     else:
         g += [maven_test(cfg, d.slug), arch_java(cfg, d.slug)]
+    if d.language == "csharp":
+        g += [wiring_gate(cfg, d)]
     return g
 
 

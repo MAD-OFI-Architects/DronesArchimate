@@ -5,6 +5,12 @@ const CAMPOS: Campo[] = [
   { name: 'orden_trabajo_id', label: 'Orden de trabajo', type: 'text' },
 ];
 
-export function LiberarReservaForm() {
-  return <CommandForm titulo="Liberar reserva" campos={CAMPOS} campoRuta="referencia" ruta={(v) => `/api/repuestos/existencia/${encodeURIComponent(v)}/liberar-reserva`} camposCuerpo={['orden_trabajo_id']} />;
-}
+export const LiberarReservaForm = () => (
+  <CommandForm
+    titulo="Liberar reserva"
+    campos={CAMPOS}
+      campoRuta="referencia"
+    ruta={(r) => `/api/repuestos/existencia/${encodeURIComponent(r)}/liberar-reserva`}
+    camposCuerpo={['orden_trabajo_id']}
+  />
+);

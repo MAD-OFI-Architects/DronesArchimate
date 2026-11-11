@@ -65,7 +65,7 @@ services:
       BUS_URL: "http://event-bus:5100"
       SIMULATORS_URL: "http://simulators:5110"
       CIFRADO_CLAVE: "ZGV2LWtleS0zMi1ieXRlcy1sb25nLWZvci1hZXMtMjU2ISE="
-      DATABASE_URL: "postgresql+psycopg://forge:forge@postgres:5432/repuestos_del_taller"
+      DATABASE_URL: "postgresql://forge:forge@postgres:5432/repuestos_del_taller"
     depends_on:
       postgres:
         condition: service_healthy

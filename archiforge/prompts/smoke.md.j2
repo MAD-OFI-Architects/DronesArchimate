@@ -1,14 +1,14 @@
 {% include '_common.md.j2' %}
 
 ## Tarea (humo del dominio, aislado)
-El orquestador ya generó, solo para este dominio, la plataforma de humo en `out/.platform/{{ d.slug }}/` (`docker-compose.yml`, bus de eventos, simuladores de TODOS los demás contextos y gateway). Úsala sin modificarla (se regenera). **Tu servicio es el único real**; los demás contextos son simuladores. Compruébalo así:
+El orquestador ya generó, solo para este dominio, la plataforma de humo en `out/.platform/{{ d.slug }}/` (`docker-compose.yml`, bus de eventos, servicios reales seleccionados, simuladores de los contextos restantes y gateway). Úsala sin modificarla (se regenera). **No supongas que este servicio es el único real**: lee `event-bus/topics.json` y la topología del compose para distinguir cada publicador/suscriptor real de cada simulador. Un contexto que figure como real debe probarse por su API real (`/api/<recurso>/...`); solo un contexto marcado como simulado se prueba por `/sim/...`.
 
 1. El servicio **recibe en `POST /events/{topic}`** exactamente los tópicos que consume y **publica al bus** los que produce (`out/.platform/{{ d.slug }}/event-bus/topics.json`, sobre y payloads en `out/docs/{{ d.slug }}/contrato-bus.md`). Corrige lo que difiera **en el servicio** (no cambies el contrato). Lee las variables de entorno de la sección «Decisiones» tal cual.
 2. Escribe **`out/services/{{ d.slug }}/smoke/smoke.py`** (solo biblioteca estándar, `urllib`): escenario contra `GATEWAY_URL` (variable de entorno; por defecto `http://localhost:8080`), con esperas con reintento (máx. 60 s por paso; espera primero `GET /api/{{ short }}/…/health` o el endpoint que corresponda):
-{% if info.consumed %}   a. Dispara, vía el simulador (`POST /sim/<contexto>/<evento>`), cada evento que este servicio consume ({{ info.consumed.keys() | list | join(', ') }}) y verifica su efecto con un `GET` de la API del servicio.
+{% if info.consumed %}   a. Dispara cada evento que este servicio consume ({{ info.consumed.keys() | list | join(', ') }}): usa la API real del publicador si su entrada en `topics.json` tiene `publisher_real=true`, y usa `POST /sim/<contexto>/<evento>` únicamente si tiene `publisher_real=false`. Verifica el efecto con un `GET` de la API de este servicio.
 {% else %}   a. Este servicio no consume eventos: crea su agregado por `POST /api/<agregado>` y verifícalo con `GET`.
 {% endif %}   b. Ejecuta los comandos de usuario principales del servicio (rutas en `{{ state_dir }}/manifest.json` → `domains[*].routes`) en un orden coherente con el modelo y verifica los cambios de estado.
-{% if info.published_events %}   c. Verifica que los eventos publicados ({{ info.published_events | join(', ') }}) llegan a los suscriptores simulados (`GET /sim/received`).
+{% if info.published_events %}   c. Verifica que los eventos publicados ({{ info.published_events | join(', ') }}) llegan a cada suscriptor según la topología: consulta el endpoint de recepción del servicio real cuando el suscriptor sea real y `GET /sim/received` solo para suscriptores simulados. No declares éxito comprobando únicamente simuladores si existe un suscriptor real.
 {% endif %}   d. Sale con código 0 solo si todo ocurrió; imprime un resumen legible.
 3. Escribe `out/docs/{{ d.slug }}/ejecucion.md`: cómo levantar solo este dominio con su plataforma de humo, URLs, el escenario y cómo correr sus pruebas.
 

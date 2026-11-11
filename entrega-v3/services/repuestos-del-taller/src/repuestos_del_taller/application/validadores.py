@@ -9,6 +9,8 @@ class _Validador:
     comando: type
 
     def validar(self, comando: Any) -> None:
+        if not isinstance(comando, self.comando):
+            raise TypeError(f"se esperaba {self.comando.__name__}")
         errores: list[str] = []
         for campo in fields(comando):
             valor = getattr(comando, campo.name)

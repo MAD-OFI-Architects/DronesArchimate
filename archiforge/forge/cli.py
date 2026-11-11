@@ -214,8 +214,18 @@ def cmd_assemble(cfg: config.Config, a) -> int:
     results = [G.npm_build(cfg2, "frontend/mfe-shell")] + [G.npm_build(cfg2, f"frontend/{p.parent.name}") for p in sorted((out / "frontend").glob("mfe-*/mfe.json"))]
     if "smoke" not in cfg.raw.get("quality", {}).get("skip", []):
         results.append(G.smoke_assembled_gate(cfg2, built))
+    fallos = []
     for g in results:
-        print(f"{'✅' if g.ok else '❌'} {g.name}" + ("" if g.ok else f": {g.detail.strip()[:300]}"))
+        if g.ok:
+            print(f"✅ {g.name}")
+        else:
+            print(f"❌ {g.name}:\n{g.detail.strip()}")
+            fallos.append(g)
+    if fallos:
+        log = out / "docs" / "ensamblado-fallo.log"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_text("\n\n".join(f"### {g.name}\n{g.detail}" for g in fallos), encoding="utf-8")
+        print(f"\nDetalle completo en {log.relative_to(cfg.root) if log.is_relative_to(cfg.root) else log}")
     archs = {(d.language, d.architecture, d.style) for d in built}
     rows = ["# Ensamblado", "", "| Dominio | Lenguaje | Arquitectura | Estilo | BD | Conformidad |", "|---|---|---|---|---|---|"]
     for d in built:

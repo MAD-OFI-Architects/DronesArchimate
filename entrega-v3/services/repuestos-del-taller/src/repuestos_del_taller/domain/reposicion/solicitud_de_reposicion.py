@@ -1,4 +1,4 @@
-"""Raíz del agregado «Solicitud de reposición»: pedido interno que nace al
+"""Raíz del agregado «Solicitud de reposición»: solicitud interna que nace al
 tocar el stock mínimo. Un método de negocio por comando del modelo; cada
 comando valida sus reglas y levanta su evento de dominio.
 """

@@ -4,10 +4,10 @@
 Eres un **revisor externo** que no escribió este código. Audita el dominio **{{ d.context }}** (`out/services/{{ d.slug }}/`, `out/frontend/{{ remote_slug }}/`, `out/docs/{{ d.slug }}/`) contra el diseño y las decisiones del arquitecto, **corrige** lo de severidad alta/media (con sus pruebas) y escribe `out/docs/{{ d.slug }}/verificacion.md`.
 
 Revisa, con evidencia (archivo:línea):
-1. **Fidelidad a las decisiones del arquitecto**: lenguaje, arquitectura, estilo y base de datos son los decididos; cada patrón **elegido** existe de verdad y cumple su rol; ningún patrón **descartado** se coló (sobreingeniería).
+1. **Fidelidad a las decisiones del arquitecto**: lenguaje, arquitectura, estilo y base de datos son los decididos; cada patrón **elegido** existe de verdad y cumple su rol; ningún patrón **descartado** se coló (sobreingeniería). Para cada patrón elegido exige evidencia mecánica `archivo:línea` de su instanciación o registro en la composición de producción y de una ruta/consumidor de producción que lo ejecute. Si la clase solo aparece en su definición, en un test o en el ADR, márcalo como incumplimiento y corrígelo; no aceptes la mera existencia del símbolo.
 2. **SOLID** (SRP, OCP/Strategy donde aplique, LSP, ISP: puertos pequeños, DIP: el dominio no depende de infraestructura).
 3. **DDD**: invariantes dentro del agregado, eventos levantados por la raíz, VOs inmutables, lenguaje ubicuo (los términos «avoid» del IR no aparecen), agregados sin acceso directo a otros agregados.
-4. **ADR**: cada fila de la tabla de patrones de `out/docs/{{ d.slug }}/decisiones-arquitectura.md` existe y cumple su rol; completa las que falten citando clases reales entre comillas invertidas.
+4. **ADR**: cada fila de la tabla de patrones de `out/docs/{{ d.slug }}/decisiones-arquitectura.md` existe y cumple su rol; completa las que falten citando clases reales entre comillas invertidas. La tabla no es evidencia por sí misma: contrástala con referencias de producción y con el composition root.
 5. **Requisitos de la evaluación** (`reference/evaluacion_final.md`) que apliquen a este dominio y estén cubiertos por las decisiones; señala los que el arquitecto decidió no cubrir.
 6. **Seguridad básica**: secretos fuera del código, datos personales cifrados si se eligió `cifrado`, validación de entrada, sin SQL concatenado.
 7. Ejecuta las pruebas del servicio y del microfrontend y reporta el resultado real.

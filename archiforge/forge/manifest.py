@@ -30,7 +30,7 @@ def service_env(d: Domain, bus: int = 5100, sim: int = 5110) -> dict:
             env["SPRING_DATA_MONGODB_URI"] = env["MONGO_URL"]
     else:
         if d.language == "python":
-            env["DATABASE_URL"] = f"postgresql+psycopg://forge:forge@postgres:5432/{db}"
+            env["DATABASE_URL"] = f"postgresql://forge:forge@postgres:5432/{db}"
         elif d.language == "csharp":
             env["DATABASE_URL"] = f"Host=postgres;Port=5432;Database={db};Username=forge;Password=forge"
         else:

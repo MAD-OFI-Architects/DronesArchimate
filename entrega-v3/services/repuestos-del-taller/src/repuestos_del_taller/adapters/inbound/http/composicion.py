@@ -1,6 +1,8 @@
 """Composition root: único lugar que conoce todas las capas."""
 from __future__ import annotations
 
+import os
+
 from ....application.manejadores import (
     AprobarSolicitudManejador, AjustarExistenciaPorConteoManejador, CancelarSolicitudManejador,
     ConfirmarConsumoManejador, LiberarReservaManejador, RegistrarEntradaDeRepuestoManejador,
@@ -8,24 +10,39 @@ from ....application.manejadores import (
 )
 from ...outbound.persistencia import (
     RepositorioCacheadoExistencia, RepositorioCacheadoSolicitudDeReposicion,
-    RepositorioExistencia, RepositorioSolicitudDeReposicion,
+    RepositorioExistencia, RepositorioExistenciaSql, RepositorioSolicitudDeReposicion,
+    RepositorioSolicitudDeReposicionSql,
 )
+from ....application.traductores import FaltanteDetectadoTraductor
 from ....application.integracion import (
     OrdenDeTrabajoCerradaConsumidor, ParadaProgramadaConsumidor, StockMinimoAlcanzadoObservador,
 )
-from ....adapters.outbound.integracion import ProcesadorDeMensajeEntrante, PublicadorDeEventosHttp
+from ....adapters.outbound.integracion import (
+    BandejaDeSalida, EnviarAvisoAdapter, ProcesadorDeMensajeEntrante, PublicadorConBandeja, PublicadorDeEventosHttp,
+)
+from ....adapters.outbound.seguridad import CifradorAes
 from ....contracts.topicos import PlanDeMantenimientoTopicos, IntervencionesTopicos
 from .endpoints import RepuestosDelTallerEndpoints
 
 
+def _repositorios(database_url: str):
+    """PostgreSQL cuando ``DATABASE_URL`` está definida; memoria solo como alternativa explícita de test."""
+    if not database_url:
+        return RepositorioExistencia(), RepositorioSolicitudDeReposicion()
+    import psycopg
+    conexion = psycopg.connect(database_url, autocommit=True)
+    return RepositorioExistenciaSql(conexion), RepositorioSolicitudDeReposicionSql(conexion)
+
+
 class RepuestosDelTallerComposicion:
-    def __init__(self, publicador=None) -> None:
-        existencia = RepositorioCacheadoExistencia(RepositorioExistencia())
-        solicitudes = RepositorioCacheadoSolicitudDeReposicion(RepositorioSolicitudDeReposicion())
+    def __init__(self, publicador=None, database_url: str | None = None) -> None:
+        base_existencias, base_solicitudes = _repositorios(os.getenv("DATABASE_URL", "") if database_url is None else database_url)
+        existencia = RepositorioCacheadoExistencia(base_existencias)
+        solicitudes = RepositorioCacheadoSolicitudDeReposicion(base_solicitudes)
         procesador = ProcesadorDeMensajeEntrante()
-        publicador = publicador or PublicadorDeEventosHttp()
-        reservar = ReservarRepuestoManejador(existencia, publicador)
-        observador = StockMinimoAlcanzadoObservador(SolicitarReposicionManejador(solicitudes))
+        publicador = publicador or PublicadorConBandeja(BandejaDeSalida(CifradorAes()), PublicadorDeEventosHttp())
+        reservar = ReservarRepuestoManejador(existencia, publicador, FaltanteDetectadoTraductor())
+        observador = StockMinimoAlcanzadoObservador(SolicitarReposicionManejador(solicitudes), aviso=EnviarAvisoAdapter())
         confirmar = ConfirmarConsumoManejador(existencia, observador)
         consumidores = {
             PlanDeMantenimientoTopicos.PARADA_PROGRAMADA: ParadaProgramadaConsumidor(reservar),

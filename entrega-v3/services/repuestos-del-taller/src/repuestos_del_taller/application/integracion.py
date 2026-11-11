@@ -3,26 +3,16 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from ..contracts.eventos import FaltanteDetectadoV1
-from ..domain.existencias.eventos import FaltanteDetectado, StockMinimoAlcanzado
-from ..domain.compartido.eventos import EventoDeDominio
+from ..domain.existencias.eventos import StockMinimoAlcanzado
 from ..domain.compartido.errores import ViolacionDeReglaDeNegocio
 from .comandos import (
     ConfirmarConsumoComando, ReservarRepuestoComando, SolicitarReposicionComando,
 )
+from .puertos import IEnviarAviso
 from .manejadores import (
     ConfirmarConsumoManejador, ReservarRepuestoManejador,
     SolicitarReposicionManejador,
 )
-
-
-class FaltanteDetectadoTraductor:
-    def traducir(self, evento: FaltanteDetectado) -> FaltanteDetectadoV1:
-        return FaltanteDetectadoV1(
-            event_id=str(evento.evento_id), occurred_on=evento.ocurrio_en.isoformat(),
-            parada_id=evento.orden_trabajo_id, referencia=evento.referencia,
-            cantidad_faltante=max(0, evento.solicitada - evento.disponible),
-        )
 
 
 class _ConsumidorIdempotente:
@@ -73,8 +63,10 @@ class OrdenDeTrabajoCerradaConsumidor(_ConsumidorIdempotente):
 
 
 class StockMinimoAlcanzadoObservador:
-    def __init__(self, manejador: SolicitarReposicionManejador, cantidad: int = 1, monto: int = 0) -> None:
+    def __init__(self, manejador: SolicitarReposicionManejador, cantidad: int = 1, monto: int = 0,
+                 aviso: IEnviarAviso | None = None, destinatario: str = "compras") -> None:
         self.manejador = manejador; self.cantidad = cantidad; self.monto = monto
+        self.aviso = aviso; self.destinatario = destinatario
 
     def observar(self, evento: StockMinimoAlcanzado, solicitud_id: str) -> None:
         try:
@@ -84,3 +76,13 @@ class StockMinimoAlcanzadoObservador:
             ))
         except ViolacionDeReglaDeNegocio:
             pass  # ya hay una solicitud abierta para la referencia: no se duplica
+        else:
+            self._avisar(evento)
+
+    def _avisar(self, evento: StockMinimoAlcanzado) -> None:
+        if self.aviso is None:
+            return
+        try:
+            self.aviso.enviar(self.destinatario, "Reposición solicitada", f"Stock mínimo alcanzado: {evento.referencia}")
+        except OSError:
+            pass  # el aviso es un efecto posterior: su fallo no revierte la solicitud

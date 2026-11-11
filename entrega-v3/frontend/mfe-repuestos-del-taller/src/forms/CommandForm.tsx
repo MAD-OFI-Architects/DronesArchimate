@@ -5,8 +5,8 @@ export interface Campo { name: string; label: string; type: 'text' | 'number'; m
 export interface CommandFormProps {
   titulo: string;
   campos: Campo[];
-  /** Campo que viaja en la ruta (no en el cuerpo). */
-  campoRuta: string;
+  /** Campo que viaja en la ruta (no en el cuerpo); ausente si la ruta es fija. */
+  campoRuta?: string;
   ruta: (valor: string) => string;
   /** Campos que viajan en el cuerpo; vacío = sin cuerpo. */
   camposCuerpo: string[];
@@ -38,7 +38,7 @@ export function CommandForm({ titulo, campos, campoRuta, ruta, camposCuerpo }: C
       return [n, c.type === 'number' ? Number(valores[n]) : valores[n].trim()];
     }));
     try {
-      await send('POST', ruta(valores[campoRuta].trim()), camposCuerpo.length ? cuerpo : undefined);
+      await send('POST', ruta(campoRuta ? valores[campoRuta].trim() : ''), camposCuerpo.length ? cuerpo : undefined);
       notify(`${titulo}: listo`);
     } catch (err) {
       setError(mensajeDeError(err));
