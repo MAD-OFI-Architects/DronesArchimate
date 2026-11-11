@@ -227,6 +227,22 @@ public class OrdenDeTrabajoHttpTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task LiberarDronComando_en_trabajo_mayor_sin_vuelo_aprobado_responde_422_con_el_codigo_del_contrato()
+    {
+        var id = await AbrirAsync(mayor: true);
+        await EjecutarAsync(id);
+        await PostAsync(id, "registrar-vuelo-de-prueba",
+            new { realizadoEn = Ahora, duracionEnMinutos = 7, aprobado = false, observaciones = "vibración" });
+
+        var respuesta = await LiberarAsync(id, "Beto");
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, respuesta.StatusCode);
+        var problema = await respuesta.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("PruebaDeVueloPendiente", problema.GetProperty("regla").GetString());
+        Assert.Equal("PRUEBA_DE_VUELO_PENDIENTE", problema.GetProperty("codigo").GetString());
+    }
+
+    [Fact]
     public async Task CerrarOrdenDeTrabajoComando_cierra_la_orden_y_deja_el_evento_en_la_bandeja()
     {
         var id = await CerradaAsync();

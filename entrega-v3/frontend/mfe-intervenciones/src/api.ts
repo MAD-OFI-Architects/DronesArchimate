@@ -1,5 +1,5 @@
 // Cliente HTTP común del remote. Todo pasa por el gateway (/api/<servicio>/…).
-export interface Problem { title?: string; detail?: string; regla?: string; status?: number }
+export interface Problem { title?: string; detail?: string; regla?: string; codigo?: string; status?: number }
 export class ApiError extends Error {
   constructor(public problem: Problem) { super(problem.detail ?? problem.title ?? 'Error'); }
 }

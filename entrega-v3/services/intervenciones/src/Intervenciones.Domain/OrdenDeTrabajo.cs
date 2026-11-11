@@ -114,8 +114,7 @@ public sealed class OrdenDeTrabajo : AggregateRoot<Guid>, IOriginador<OrdenDeTra
     {
         var siguiente = Transicionar(e => e.AlLiberar());
         CheckRule(new LiberaElMismoQueEjecuto(EsTrabajoMayor, Guard.Texto(liberadaPor, nameof(liberadaPor), 100), _tareas));
-        if (EsTrabajoMayor && VueloDePrueba is not { Aprobado: true })
-            throw new DomainException("En trabajos mayores la liberación exige un vuelo de prueba aprobado.");
+        CheckRule(new PruebaDeVueloPendiente(EsTrabajoMayor, VueloDePrueba));
 
         Liberacion = new Liberacion(liberacionId, liberadaPor, ahora, VueloDePrueba);
         Estado = siguiente;

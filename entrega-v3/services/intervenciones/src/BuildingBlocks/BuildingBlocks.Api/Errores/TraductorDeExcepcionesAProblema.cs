@@ -17,11 +17,19 @@ public static class TraductorDeExcepcionesAProblema
             ("errores", ex.Errores.Select(e => new { campo = e.Campo, mensaje = e.Mensaje }).ToList())),
         RecursoNoEncontradoException ex => Problema(StatusCodes.Status404NotFound, "Recurso no encontrado", ex.Message),
         BusinessRuleViolationException ex => Problema(StatusCodes.Status422UnprocessableEntity, "Regla de negocio incumplida",
-            ex.Message, ("regla", ex.BrokenRule.GetType().Name)),
+            ex.Message, ("regla", ex.BrokenRule.GetType().Name), ("codigo", CodigoDelContrato(ex.Message))),
         DomainException ex => Problema(StatusCodes.Status400BadRequest, "Dato inválido para el dominio", ex.Message),
         ConflictoDeConcurrenciaException ex => Problema(StatusCodes.Status409Conflict, "Conflicto de concurrencia", ex.Message),
         _ => Problema(StatusCodes.Status500InternalServerError, "Error interno", "Ocurrió un error inesperado.")
     };
+
+    /// <summary>Las reglas anteponen el código del contrato al mensaje ("CODIGO: detalle"); sin código devuelve vacío.</summary>
+    private static string CodigoDelContrato(string mensaje)
+    {
+        var corte = mensaje.IndexOf(':');
+        var candidato = corte > 0 ? mensaje[..corte] : string.Empty;
+        return candidato.Length > 0 && candidato.All(c => c is >= 'A' and <= 'Z' or '_') ? candidato : string.Empty;
+    }
 
     private static ProblemDetails Problema(int estado, string titulo, string detalle, params (string Clave, object Valor)[] extensiones)
     {

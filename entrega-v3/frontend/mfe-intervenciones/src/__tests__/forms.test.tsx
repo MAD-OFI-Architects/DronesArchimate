@@ -72,7 +72,7 @@ describe.each(casos)('$nombre', (c) => {
   });
 
   it('muestra la regla de problem+json en lenguaje claro', async () => {
-    fetchSimulado.mockImplementation(() => respuesta(422, { title: 'Regla', regla: 'ORDEN_CERRADA_INMUTABLE' }));
+    fetchSimulado.mockImplementation(() => respuesta(422, { title: 'Regla de negocio incumplida', regla: 'OrdenCerradaInmutable', codigo: 'ORDEN_CERRADA_INMUTABLE' }));
     render(c.form);
     await escribir('Identificador de la orden', ORDEN);
     await c.rellenar();

@@ -160,7 +160,8 @@ public class OrdenDeTrabajoTests
         var orden = Abierta(true);
         Ejecutar(orden, "Ana");
 
-        Assert.Throws<DomainException>(() => orden.LiberarDron(Guid.NewGuid(), "Pompilio", Ahora));
+        var violacion = Assert.Throws<BusinessRuleViolationException>(() => orden.LiberarDron(Guid.NewGuid(), "Pompilio", Ahora));
+        Assert.IsType<PruebaDeVueloPendiente>(violacion.BrokenRule);
     }
 
     [Fact]
