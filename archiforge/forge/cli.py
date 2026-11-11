@@ -269,7 +269,7 @@ def cmd_assemble(cfg: config.Config, a) -> int:
     manifest = build_manifest(ir, built)
     created = scaffold.assemble_files(cfg2, ir, manifest)
     print(f"Ensamblado de {len(built)} dominio(s): {', '.join(d.context for d in built)} ({len(created)} archivos de plataforma)")
-    results = [G.shell_design_gate(cfg2)] + [G.design_gate(cfg2, f"frontend/{p.parent.name}") for p in sorted((out / "frontend").glob("mfe-*/mfe.json"))]
+    results = [G.shell_design_gate(cfg2)] + [g for p in sorted((out / "frontend").glob("mfe-*/mfe.json")) for g in (G.design_gate(cfg2, f"frontend/{p.parent.name}"), G.hints_gate(cfg2, f"frontend/{p.parent.name}"))]
     results += [G.npm_build(cfg2, "frontend/mfe-shell")] + [G.npm_build(cfg2, f"frontend/{p.parent.name}") for p in sorted((out / "frontend").glob("mfe-*/mfe.json"))]
     if "smoke" not in cfg.raw.get("quality", {}).get("skip", []):
         results.append(G.smoke_assembled_gate(cfg2, built))

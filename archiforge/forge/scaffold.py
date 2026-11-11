@@ -332,7 +332,7 @@ export async function send<T = unknown>(method: 'GET' | 'POST', path: string, bo
 export const notify = (message: string) => window.dispatchEvent(new CustomEvent('mfe:notify', { detail: { message } }));
 """
 STYLES = """/* Sistema de diseño compartido: el shell define los tokens --mfe-* en :root y atraviesan el Shadow DOM.
-   Los valores de respaldo permiten ejecutar el remote solo (vite dev). Vocabulario de clases: card, field, btn, alert, table, badge, empty. */
+   Los valores de respaldo permiten ejecutar el remote solo (vite dev). Vocabulario de clases: card, field, campo, hint, btn, alert, table, badge, empty. */
 :host{display:block;font-family:var(--mfe-font,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif);color:var(--mfe-text,#1b2430);line-height:1.5}
 *{box-sizing:border-box}
 .mfe{display:grid;gap:var(--mfe-gap,1.25rem)}
@@ -360,6 +360,9 @@ button:disabled{opacity:.55;cursor:progress}
 .badge{display:inline-block;padding:.1rem .55rem;border-radius:999px;font-size:.75rem;font-weight:650;background:var(--mfe-badge-bg,#e0e9ff);color:var(--mfe-primary,#1d4ed8)}
 .empty{padding:1.2rem;text-align:center;color:var(--mfe-muted,#5b6776);border:1px dashed var(--mfe-border,#dde3ea);border-radius:var(--mfe-radius,12px)}
 dl{display:grid;grid-template-columns:max-content 1fr;gap:.35rem 1rem;margin:0}dt{font-weight:600;color:var(--mfe-muted,#5b6776)}dd{margin:0}
+.campo{display:grid;gap:.3rem}
+.hint{display:block;margin:0;font-size:.8rem;font-weight:400;line-height:1.35;color:var(--mfe-muted,#5b6776)}
+h3 + p.hint{margin:-.4rem 0 .15rem}
 """
 SETUP = "import '@testing-library/jest-dom/vitest';\n"
 
@@ -390,8 +393,15 @@ export function {name}() {{
     <section className="card">
       <form onSubmit={{onSubmit}} aria-label="{cm['command']}">
         <h3>{cm['command']}</h3>
-        <label className="field">Identificador<input value={{id}} onChange={{(e) => setId(e.target.value)}} /></label>
-        <label className="field">Cuerpo (JSON)<textarea rows={{4}} value={{body}} onChange={{(e) => setBody(e.target.value)}} /></label>
+        <p className="hint">Describe en una línea para qué sirve «{cm['command']}».</p>
+        <div className="campo">
+          <label className="field">Identificador<input value={{id}} aria-describedby="ayuda-id" onChange={{(e) => setId(e.target.value)}} /></label>
+          <small className="hint" id="ayuda-id">Identificador del agregado sobre el que actúa el comando; indica de dónde sale y un ejemplo.</small>
+        </div>
+        <div className="campo">
+          <label className="field">Cuerpo (JSON)<textarea rows={{4}} value={{body}} aria-describedby="ayuda-cuerpo" onChange={{(e) => setBody(e.target.value)}} /></label>
+          <small className="hint" id="ayuda-cuerpo">Datos del comando en JSON; reemplázalo por un campo por dato, cada uno con su ayuda.</small>
+        </div>
         <button type="submit">{cm['command']}</button>
         {{error && <p role="alert" className="alert">{{error}}</p>}}
       </form>

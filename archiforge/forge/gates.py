@@ -623,3 +623,31 @@ def interconnect_gates(cfg: Config, ir: dict, built: list) -> list[Gate]:
                                                     else "ningún proveedor síncrono es real todavía: todo pasa por simuladores.")),
             Gate(not bad_providers, "interconexión: proveedores exponen la ruta del contrato",
                  "\n".join(uniq(bad_providers)) or "todos los proveedores reales exponen sus rutas de API síncrona.")]
+
+
+# ------------------------------------------------------------------ Ayudas de los formularios del microfrontend
+_FIELD_CTRL = re.compile(r"<(?:input|select|textarea)\b")
+
+
+def hints_gate(cfg: Config, rel: str) -> Gate:
+    """Cada formulario explica para qué sirve (`descripcion`) y cada campo dice qué se escribe (`ayuda`), enlazada con aria-describedby."""
+    root = cfg.out / rel / "src"
+    problems = []
+    for f in conformance._files(root, {".tsx"}):
+        name = f.name
+        relative = f.relative_to(root).as_posix().lower()          # solo la ruta DENTRO del remote: la carpeta del proyecto puede llamarse «tests»
+        if "test" in relative:
+            continue
+        text = f.read_text(encoding="utf-8", errors="ignore")
+        controls = len(_FIELD_CTRL.findall(text))
+        if controls and text.count("aria-describedby") < controls:
+            problems.append(f"{f.relative_to(root).as_posix()}: {controls} control(es) de formulario y solo {text.count('aria-describedby')} con aria-describedby (ayuda enlazada).")
+        if name.endswith("Form.tsx") and name != "CommandForm.tsx":
+            if "descripcion=" not in text and '<p className="hint"' not in text:        # prop del CommandForm o párrafo propio bajo el título
+                problems.append(f"{f.relative_to(root).as_posix()}: falta la `descripcion` del comando.")
+            defines = "interface Campo" in text
+            labels = len(re.findall(r"\b(?:etiqueta|label)\s*:", text))
+            helps = len(re.findall(r"\bayuda\s*:", text))
+            if not defines and labels > helps:
+                problems.append(f"{f.relative_to(root).as_posix()}: {labels} campo(s) y solo {helps} con `ayuda`.")
+    return Gate(not problems, f"ayudas de los formularios ({rel})", "\n".join(problems) or "cada formulario y cada campo explican qué se escribe.")

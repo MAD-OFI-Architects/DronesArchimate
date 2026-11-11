@@ -102,3 +102,51 @@ def test_style_gate_only_applies_to_microservices_and_runs_in_the_adapters_stage
     assert G.service_style_gate(cfg, dom("hexagonal", "soa"), MANIFEST).ok                     # otros estilos: no aplica
     import inspect
     assert "service_style_gate" in inspect.getsource(G.build_gates)
+
+
+# ------------------------------------------------------------------ ayudas de los formularios del microfrontend
+def _front(tmp_path, files):
+    for rel, text in files.items():
+        f = tmp_path / "frontend" / "mfe-x" / "src" / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(text, encoding="utf-8")
+    return dataclasses.replace(config.load(TOOL / "forge.toml"), out=tmp_path)
+
+
+GOOD_FORM = ("import { CommandForm } from './CommandForm';\nexport const AForm = () => <CommandForm titulo=\"A\" descripcion=\"Hace A.\" "
+             "campos={[{ nombre: 'x', etiqueta: 'X', tipo: 'texto', ayuda: 'Qué se escribe, p. ej. 1.' }]} />;\n")
+GOOD_CMD = "export interface Campo { nombre: string; etiqueta: string; ayuda?: string }\nexport const C = () => <input aria-describedby=\"a\" />;\n"
+
+
+def test_hints_gate_requires_description_and_help_for_every_field(tmp_path):
+    cfg = _front(tmp_path, {"forms/AForm.tsx": GOOD_FORM, "forms/CommandForm.tsx": GOOD_CMD})
+    assert G.hints_gate(cfg, "frontend/mfe-x").ok
+    cfg = _front(tmp_path, {"forms/AForm.tsx": GOOD_FORM.replace(" descripcion=\"Hace A.\"", ""), "forms/CommandForm.tsx": GOOD_CMD})
+    g = G.hints_gate(cfg, "frontend/mfe-x")
+    assert not g.ok and "descripcion" in g.detail
+    cfg = _front(tmp_path, {"forms/AForm.tsx": GOOD_FORM.replace(", ayuda: 'Qué se escribe, p. ej. 1.'", ""), "forms/CommandForm.tsx": GOOD_CMD})
+    g = G.hints_gate(cfg, "frontend/mfe-x")
+    assert not g.ok and "1 campo(s) y solo 0 con `ayuda`" in g.detail
+    cfg = _front(tmp_path, {"forms/AForm.tsx": GOOD_FORM, "forms/CommandForm.tsx": "export const C = () => <input />;\n"})
+    g = G.hints_gate(cfg, "frontend/mfe-x")
+    assert not g.ok and "aria-describedby" in g.detail
+
+
+def test_scaffolded_frontend_ships_hint_styles_and_a_stub_that_satisfies_the_hints_gate(tmp_path):
+    from forge import scaffold
+    cfg = dataclasses.replace(config.load(TOOL / "forge.toml"), out=tmp_path)
+    ir = build_ir(ARCHI, DOCS)
+    m = build_manifest(ir, cfg.domains)
+    r = m["frontend"]["remotes"][0]
+    scaffold.scaffold_remote(cfg, m, r)
+    css = (tmp_path / "frontend" / r["slug"] / "src" / "styles.css").read_text(encoding="utf-8")
+    assert ".hint{" in css and ".campo{" in css
+    assert G.hints_gate(cfg, f"frontend/{r['slug']}").ok                       # el esqueleto ya nace con ayudas
+
+
+def test_prompt_and_stage_require_hints():
+    text = (TOOL / "prompts" / "mfe.md.j2").read_text(encoding="utf-8")
+    assert "Ayudas (obligatorias)" in text and "aria-describedby" in text and "fuera** del `<label>`" in text
+    import inspect
+    from forge import cli, stages
+    assert "hints_gate" in inspect.getsource(stages.build_stages) and "hints_gate" in inspect.getsource(cli.cmd_assemble)
