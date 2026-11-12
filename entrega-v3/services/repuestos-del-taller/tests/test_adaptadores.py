@@ -101,3 +101,23 @@ def test_observador_envia_aviso_por_el_puerto_acl():
     campos = {f.name: "R-1" if f.name == "referencia" else 1 for f in dataclasses.fields(StockMinimoAlcanzado) if f.init}
     obs.observar(StockMinimoAlcanzado(**campos), str(uuid.uuid4()))
     assert aviso.llamadas == ["compras"]
+
+
+class TestCifradorFallaCerrado:
+    def test_sin_clave_no_arranca_en_vez_de_usar_una_clave_publica(self, monkeypatch):
+        import pytest
+        monkeypatch.delenv("CIFRADO_CLAVE", raising=False)
+        with pytest.raises(ValueError, match="CIFRADO_CLAVE"):
+            CifradorAes()
+
+    def test_una_clave_que_no_es_base64_o_es_corta_se_rechaza(self, monkeypatch):
+        import base64
+        import pytest
+        with pytest.raises(ValueError, match="base64"):
+            CifradorAes("esto no es base64!!")
+        with pytest.raises(ValueError, match="16 bytes"):
+            CifradorAes(base64.b64encode(b"corta").decode())
+
+    def test_la_clave_del_entorno_cifra_y_descifra_ida_y_vuelta(self):
+        c = CifradorAes()
+        assert c.descifrar(c.cifrar("dato personal")) == "dato personal" and "dato personal" not in c.cifrar("dato personal")
