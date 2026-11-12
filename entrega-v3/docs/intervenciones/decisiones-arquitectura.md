@@ -4,7 +4,7 @@ Contexto **Intervenciones** (clasificación en el modelo: **Core**). Propósito:
 
 ## 1. Arquitectura — Clean + DDD (C#)
 
-**Decisión:** Clean Architecture con DDD táctico, en C# (.NET 8). Justificación del arquitecto: Clean+DDD por la riqueza de reglas del agregado Orden de trabajo; C# por tipado fuerte y soporte de DDD.
+**Decisión:** Clean Architecture con DDD táctico, en C# (.NET 8). Justificación del arquitecto (resumen; texto completo en `decisiones.toml`): Clean + DDD porque el valor del contexto está en el agregado Orden de trabajo (seis estados, reglas con nombre, firmas distintas) y el dominio no debe depender de MongoDB, del bus ni de HTTP; C# por el tipado fuerte, que rechaza estados y valores inválidos antes de ejecutar (H-22, H-23).
 
 **Por qué encaja:**
 - El contexto es **Core**: concentra reglas propias del negocio, no soporte genérico. Las reglas están en los contratos: `ORDEN_CERRADA_INMUTABLE`, `PARADA_INEXISTENTE`, `SERIE_FALTANTE`, `LIBERA_EL_MISMO_QUE_EJECUTO` (y `PRUEBA_DE_VUELO_PENDIENTE` en el contrato de ejecución y liberación).
@@ -19,7 +19,7 @@ Contexto **Intervenciones** (clasificación en el modelo: **Core**). Propósito:
 
 ## 2. Estilo de servicio — Microservicio
 
-**Decisión:** microservicio autónomo con su propia base de datos; se integra por eventos (bus) y APIs. Justificación del arquitecto: microservicio con eventos; consume y publica eventos del ciclo de la OT.
+**Decisión:** microservicio autónomo con su propia base de datos; se integra por eventos (bus) y APIs. Justificación del arquitecto (resumen): contexto Core con dueño y ritmo propios que debe operar aunque Repuestos o Plan estén caídos (D-18); se relaciona con los demás solo por eventos y no comparte base de datos.
 
 - **Despliegue:** un contenedor propio (puerto 5101), configurado solo por variables de entorno (`PORT`, `BUS_URL`, `SIMULATORS_URL`, `CIFRADO_CLAVE`, `MONGO_URL`).
 - **Datos:** base propia; ningún otro contexto lee sus colecciones. Los demás se enteran del cierre de una OT por el evento, no por la base.
@@ -28,7 +28,7 @@ Contexto **Intervenciones** (clasificación en el modelo: **Core**). Propósito:
 
 ## 3. Base de datos — MongoDB
 
-**Decisión:** MongoDB (replica set de un nodo). Justificación del arquitecto: el agregado se guarda como documento (memento) con transacciones en replica set.
+**Decisión:** MongoDB (replica set de un nodo). Justificación del arquitecto (resumen): la orden se lee y se guarda como una unidad (tareas, consumos, hallazgos, vuelo de prueba y firmas) y un documento la representa sin partirla en tablas; el conjunto de réplicas aporta las transacciones que necesita el outbox.
 
 - **Forma del agregado:** `OrdenDeTrabajo` incluye sus tareas, consumos, hallazgos, vuelos de prueba y liberación; se lee y escribe **completa**, como una unidad. Un documento por orden coincide con el límite de consistencia del agregado, sin joins ni mapeo relacional.
 - **Consistencias que exige:**
@@ -54,7 +54,7 @@ Contexto **Intervenciones** (clasificación en el modelo: **Core**). Propósito:
 
 ### Descartados y por qué
 
-Ningún patrón del catálogo fue descartado por el arquitecto: los diez están elegidos. Quedan fuera, por no estar en el catálogo de decisiones, estas alternativas (propuesta del asistente, a confirmar):
+Ningún patrón del catálogo fue descartado por el arquitecto: los diez están elegidos. Quedan fuera, por no estar en el catálogo de decisiones, estas alternativas:
 - **Event Sourcing:** no hace falta; el modelo exige guardar el estado final de la OT y su evidencia, no reconstruir historia por eventos, y añadiría complejidad de proyecciones.
 - **Saga / orquestación distribuida:** el contexto no coordina transacciones entre servicios; cada reacción (abrir, poner en espera) es una acción local.
 - **Bases de lectura separadas (CQRS completo):** la carga de lectura se resuelve con la caché; una réplica de lectura sería prematura.
@@ -91,5 +91,5 @@ API síncrona: consulta de habilitación en Habilitación de Personal (`/api/hab
 - Dependencia de transacciones: MongoDB debe correr como replica set; sin él, la bandeja de salida pierde atomicidad.
 - La clave de cifrado llega por entorno (`CIFRADO_CLAVE`); su rotación queda fuera de alcance.
 - La caché puede servir datos obsoletos si la invalidación falla; es un riesgo aceptado porque solo cachea lecturas y se invalida al escribir.
-- Las justificaciones de lenguaje, arquitectura, estilo y base de datos del arquitecto son textos de ejemplo; este documento las complementa con evidencia del modelo (a confirmar por el arquitecto).
+- Las razones de cada decisión y de cada patrón están en `decisiones.toml`; este documento las contrasta con evidencia del modelo y del código.
 - La cadena de comportamientos y los estados ya están implementados con las clases citadas en la tabla de patrones (verificado en S50).

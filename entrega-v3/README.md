@@ -1,6 +1,6 @@
 # Entrega V3 — producto generado desde el modelo ArchiMate
 
-Este directorio es la **salida ejecutable** de ArchiForge para la evaluación final. Está generado a partir de:
+Este directorio es la **salida ejecutable** de ArchiForge. Está generado a partir de:
 
 - `diseno/modelo/drones-mantenimiento.archimate`
 - las decisiones de arquitectura de `archiforge/decisiones/`

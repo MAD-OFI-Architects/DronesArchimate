@@ -1,10 +1,10 @@
 # Supuestos de diseño — Intervenciones
 
 - Los campos de los eventos entre contextos son supuestos (ver `contrato-bus.md`): el modelo ArchiMate no los define.
-- Las justificaciones del arquitecto en decisiones.toml son texto de ejemplo; el ADR las complementa con evidencia del modelo (a confirmar). La política de caché y la versión optimista del documento son criterio del ADR.
+- Las razones de las decisiones están en decisiones.toml; el ADR las contrasta con evidencia del modelo. La política de caché y la versión optimista del documento son criterio del ADR.
 - Plataforma .NET: el SDK es 10.0, pero el entorno solo tiene los runtimes de ASP.NET Core 8, así que todos los proyectos apuntan a `net8.0` (mínimo permitido) para que compilen y las pruebas corran.
 - El kernel guarda cada agregado en MongoDB como documento `{_id, version, datos}`; `version` da concurrencia optimista (conflicto → 409). Las pruebas usan el almacén en memoria; el adaptador MongoDB no se prueba en herméticas (requiere replica set).
-- El despacho del outbox reintenta con espera exponencial (200 ms base, tope 30 s) y abandona tras 10 intentos; son valores genéricos del kernel, ajustables con `OpcionesDeDespacho`.
+- El despacho del outbox reintenta con espera exponencial (200 ms base, tope 30 s) y, tras 10 intentos, deja el mensaje sin publicar y lo registra como error (no hay reproceso automático); son valores genéricos del kernel, ajustables con `OpcionesDeDespacho`.
 - `Intervenciones.Api` solo trae un `Program.cs` mínimo (`/health`, middlewares y `POST /events/{topic}` del kernel); las etapas siguientes añaden las capas del dominio.
 - Dominio: `EsTrabajoMayor` es un indicador que se fija al abrir la OT; el modelo habla de «trabajos mayores» (vuelo de prueba y liberación por otra persona) pero no define cuáles son.
 - Dominio: `ParadaInexistente` recibe `paradaExiste`, que la capa de aplicación obtiene de la parada programada; el dominio no consulta otros contextos.

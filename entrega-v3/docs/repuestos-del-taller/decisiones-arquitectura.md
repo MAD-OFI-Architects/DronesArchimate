@@ -1,6 +1,6 @@
 # Decisiones de arquitectura — Repuestos del Taller (ADR)
 
-> Documento entregable de la evaluación: argumenta las decisiones **del arquitecto** (no las sustituye).
+> Documento de decisiones de arquitectura: recoge las decisiones **del arquitecto** con sus razones (`decisiones.toml`) y las contrasta con el modelo y con el código.
 > Fuente del modelo: IR ArchiMate (`ir.json`) — contexto clasificado **Soporte**, propósito: «Reservar y consumir repuestos por OT y pedir reposición al tocar el mínimo».
 
 ## 1. Arquitectura — Hexagonal
@@ -19,8 +19,7 @@ La hexagonal es la conexión natural con ese nivel de complejidad: el dominio ca
 
 ## 2. Estilo de servicio — Microservicio
 
-**Justificación del arquitecto** (cita tal cual del registro de decisiones): «microservicio con eventos (reservas y reposición)».
-*(La cadena del registro es un marcador de ejemplo; esta redacción es propuesta del asistente, a confirmar.)*
+**Justificación del arquitecto** (cita tal cual del registro de decisiones): «Microservicio con eventos. La reserva es inmediata y el consumo eventual (D-11: una transacción modifica un solo agregado): Repuestos reserva al conocer la parada programada y descuenta cuando llega «Orden de trabajo cerrada». Si Intervenciones cae, el stock no se corrompe y los avisos esperan. Tiene base de datos propia y se integra solo por eventos y por una llamada síncrona protegida (avisos). Costo aceptado: el stock se descuenta unos instantes después de cerrar la orden.»
 
 **Qué implica aquí:**
 
@@ -30,14 +29,15 @@ La hexagonal es la conexión natural con ese nivel de complejidad: el dominio ca
 
 ## 3. Base de datos — PostgreSQL
 
-**Justificación del arquitecto** (cita tal cual): «PostgreSQL; el stock exige consistencia transaccional».
-*(Propuesta del asistente, a confirmar: la justificación registrada es un marcador de ejemplo; el argumento se completa a continuación.)*
+**Justificación del arquitecto** (cita tal cual): «PostgreSQL. Las existencias exigen consistencia estricta: el contrato impone que lo reservado no supere la existencia y que la existencia usable sea la física menos lo reservado, y las transacciones relacionales y las claves únicas por referencia e identificador son la base natural para sostenerlo. Cada agregado se guarda como una fila con su memento en JSON. Se descartó MongoDB porque aquí las restricciones relacionales aportan más que la flexibilidad documental. Límite reconocido: la implementación actual no bloquea la fila durante una reserva, así que la concurrencia fina sobre una misma referencia está pendiente de reforzar y de probar. Costo aceptado: una segunda tecnología de base de datos que operar.»
+
+Lo que sigue contrasta esa justificación con la forma del agregado y con el contrato.
 
 **Argumento con la forma del agregado:**
 
-- `Existencia` es una raíz con una **colección de reservas** (`ReservaDeRepuesto`) cuyas invariantes cruzan filas: `Σ reservado ≤ física` y `disponible = física − reservado`. Ese total que cruza filas pide transacciones ACID con bloqueo de fila: PostgreSQL garantiza que dos reservas concurrentes sobre la misma referencia no sobre-comprometan stock.
+- `Existencia` es una raíz con una **colección de reservas** (`ReservaDeRepuesto`) cuyas invariantes cruzan filas: `Σ reservado ≤ física` y `disponible = física − reservado`. Ese total que cruza filas pide transacciones relacionales: PostgreSQL ofrece los medios para sostenerlo (transacciones, bloqueo de fila, claves únicas). **Límite reconocido:** la implementación actual no bloquea la fila durante una reserva; reforzarlo y probarlo con peticiones simultáneas sobre una misma referencia está pendiente.
 - El contrato de *Reserva de repuestos* (N4) exige «operación atómica e idempotente; reintentos seguros» y el RNF del servicio es «respuesta < 2 s; trazabilidad de cambios; consistencia fuerte dentro del subdominio». Una BD relacional cubre los tres: transacción + clave de idempotencia (`eventId`) + tabla de outbox con historial.
-- El **outbox transaccional** (`BandejaDeSalida`) necesita escribir el evento y el cambio de estado en la misma transacción: solo viable con una BD transaccional como PostgreSQL (DATABASE_URL: `postgresql+psycopg://…`).
+- La **bandeja de salida** (`BandejaDeSalida`) guarda los eventos de forma durable en PostgreSQL (cifrados, con reintentos y estado «fallido» al agotar intentos) y la **bandeja de entrada** registra los `eventId` ya procesados. Que el evento comparta transacción con el agregado es una mejora pendiente (ver §9).
 - No se necesita flexibilidad documental: los agregados son dos y sus proyecciones (consultas GET de existencia y solicitud) son simples. MongoDB no aportaría nada aquí.
 
 ## 4. Patrones
@@ -64,7 +64,7 @@ La hexagonal es la conexión natural con ese nivel de complejidad: el dominio ca
 - **Base de datos**: contenedor PostgreSQL propio del dominio; `DATABASE_URL=postgresql+psycopg://forge:forge@postgres:5432/repuestos_del_taller`. La migra/tabla de `BandejaDeSalida` viaja con el servicio.
 - **Bus de eventos**: contenedor `event-bus` (5100); `BUS_URL` lo consume `PublicadorDeEventosHttp` (publicar) y la entrega entrante llega por `POST /events/{topic}` con idempotencia (`ProcesadorDeMensajeEntrante`).
 - **Simuladores**: contenedor `simulators` (5110) que emula Plan de Mantenimiento, Intervenciones y Notificaciones; `SIMULATORS_URL` lo consume `EnviarAvisoAdapter` (ACL).
-- **Gateway** (8080): enruta `/api/repuestos-del-taller/…` al servicio y `/sim/…` a los simuladores; el shell de microfrontends lo compone.
+- **Gateway** (8080): enruta `/api/repuestos/…` al servicio y `/sim/…` a los simuladores; el shell de microfrontends lo compone.
 - Todo se levanta con un único `docker compose` del orquestador; las variables (`PORT`, `BUS_URL`, `SIMULATORS_URL`, `CIFRADO_CLAVE`, `DATABASE_URL`) las fija el compose y el servicio solo las lee.
 
 ## 6. Microfrontend
@@ -88,10 +88,10 @@ Detalle de payloads y sobre en `contrato-bus.md` (contract-first; manda sobre lo
 ## 8. Riesgos y supuestos
 
 - **Payloads de eventos**: el modelo ArchiMate nombra los eventos pero no sus campos; los campos de `contrato-bus.md` son supuestos de diseño ajustables en `config/event-payloads.json`.
-- **Justificaciones del arquitecto**: el registro trae cadenas de ejemplo; se citan tal cual y las completadas se marcan «(propuesta del asistente, a confirmar)».
+- **Justificaciones del arquitecto**: las razones de cada decisión y de cada patrón están en `decisiones.toml`; este documento las cita y las contrasta con el modelo y con el código.
 - **Cifrado simple**: AES con clave simétrica por variable de entorno (`CIFRADO_CLAVE`); es deliberadamente simple — no hay rotación de claves ni cifrado de campo por campo, adecuado para un contexto de Soporte.
 - **Ciclo de vida (State)**: el modelo no define la tabla de transiciones completa; se toman transiciones mínimas válidas derivadas de los comandos (reservar → reservado; confirmar consumo → consumido; bajo mínimo → reponiendo tras aprobar y recibir; ver `supuestos.md`).
-- **Concurrencia de reservas**: dos paradas simultáneas sobre la misma referencia pueden chocar; la consistencia fuerte de PostgreSQL lo resuelve, pero puede producir `EXISTENCIA_INSUFICIENTE` esperado, que ya tiene trayectoria (evento `Faltante detectado`).
+- **Concurrencia de reservas**: dos paradas simultáneas sobre la misma referencia pueden chocar; la transacción relacional es el medio previsto para resolverlo, pero hoy no hay bloqueo de fila ni prueba de concurrencia sobre una misma referencia (pendiente); cuando falta stock se produce `EXISTENCIA_INSUFICIENTE`, que ya tiene trayectoria (evento `Faltante detectado`).
 - **Disponibilidad del simulador de Notificaciones**: si cae, el aviso falla; el comando de negocio no se revierte — el aviso es un efecto posterior y los reintentos del bus/ACL deben cubrirlo.
 
 ## 9. Estado real de la implementación (revisión S50)
@@ -100,5 +100,5 @@ Qué está cableado y qué es solo pieza disponible, para sustentar sin sobrepro
 
 - **Cableado y probado:** State (`EstadoExistencia`, `EstadoSolicitud`), caché (`RepositorioCacheadoExistencia`, `RepositorioCacheadoSolicitudDeReposicion`), consumidores idempotentes (`ParadaProgramadaConsumidor`, `OrdenDeTrabajoCerradaConsumidor`), política *Stock mínimo alcanzado → Solicitar reposición* (`StockMinimoAlcanzadoObservador`, conectada en `RepuestosDelTallerComposicion`) y publicación de `Faltante detectado` por `PublicadorDeEventosHttp`.
 - **Cableado también:** `BandejaDeSalida` (outbox, cifrada en reposo con `CifradorAes`) vía `PublicadorConBandeja`, y `IEnviarAviso`/`EnviarAvisoAdapter` desde `StockMinimoAlcanzadoObservador`; los mementos sirven para serializar y restaurar.
-- **Persistencia:** con `DATABASE_URL` definida, `RepuestosDelTallerComposicion` (`_repositorios`, `composicion.py`) conecta PostgreSQL con `psycopg` y usa `RepositorioExistenciaSql` y `RepositorioSolicitudDeReposicionSql`, que guardan y restauran los agregados con `crear_memento`/`restaurar_desde` (rol real de `ExistenciaMemento` y `SolicitudDeReposicionMemento`); los decoradores de caché envuelven esos repositorios. Sin `DATABASE_URL` se usan `RepositorioExistencia` y `RepositorioSolicitudDeReposicion` en memoria, solo como alternativa de test.
-- **Límite:** la `BandejaDeSalida` (outbox) sigue en memoria: no comparte transacción con el agregado en PostgreSQL, así que el evento puede perderse si el proceso cae entre guardar y despachar.
+- **Persistencia:** con `DATABASE_URL` definida, `RepuestosDelTallerComposicion` (`_persistencia`, `composicion.py`) conecta PostgreSQL con `psycopg` y usa `RepositorioExistenciaSql` y `RepositorioSolicitudDeReposicionSql`, que guardan y restauran los agregados con `crear_memento`/`restaurar_desde` (rol real de `ExistenciaMemento` y `SolicitudDeReposicionMemento`); los decoradores de caché envuelven esos repositorios. Sin `DATABASE_URL` se usan `RepositorioExistencia` y `RepositorioSolicitudDeReposicion` en memoria, solo como alternativa de test.
+- **Límite:** la bandeja de salida (`bandeja_de_salida`) y la de entrada (`bandeja_de_entrada`) son durables en PostgreSQL, pero el guardado del evento no comparte transacción con el del agregado: si el proceso cae justo entre ambos pasos, ese evento puede perderse. El generador ya trae un esqueleto transaccional; falta regenerar el servicio con él.
