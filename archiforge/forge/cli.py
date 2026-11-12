@@ -107,6 +107,16 @@ def _context(cfg: config.Config, name: str) -> str:
     return hits[0]
 
 
+def cmd_platform(cfg: config.Config, a) -> int:
+    if a.messaging:
+        print(f"✔ {decisions.write_platform(cfg, a.messaging, a.why)}")
+    cur = cfg.platform.get("mensajeria")
+    print(f"Canal de eventos: {cur or 'sin decidir'}" + (f" — {decisions.MENSAJERIAS[cur]}" if cur else ""))
+    if not cur:
+        print("Opciones:\n" + "\n".join(f"  · {k}: {v}" for k, v in decisions.MENSAJERIAS.items()))
+    return 0
+
+
 def cmd_decide(cfg: config.Config, a) -> int:
     ctx = _context(cfg, a.name)
     cur = next((d for d in cfg.domains if d.context == ctx), None)
@@ -127,7 +137,7 @@ def cmd_decide(cfg: config.Config, a) -> int:
         d.rationale[k.strip()] = v.strip()
     missing = [n for n, v in (("--lang", d.language), ("--arch", d.architecture), ("--style", d.style), ("--db", d.database)) if not v]
     if missing:
-        raise SystemExit(f"Faltan decisiones: {', '.join(missing)}. La herramienta no elige por ti (mira `python -m forge advise \"{ctx}\"`).")
+        raise SystemExit(f"Faltan decisiones: {', '.join(missing)}. La herramienta no elige por ti .")
     errors, warns = decisions.validate(cfg, d)
     if errors:
         raise SystemExit("Decisiones inválidas:\n" + "\n".join(f"  ✗ {e}" for e in errors))
@@ -163,6 +173,7 @@ def cmd_domains(cfg: config.Config) -> int:
             print(f"{c['name']:28} {'sí':9} {d.language:8} {d.architecture:12} {d.style:16} {d.database:11} {_domain_status(cfg, d)}")
         else:
             print(f"{c['name']:28} {'—':9} (se simula; decide con `forge decide` para construirlo)")
+    print(f"\nCanal de eventos de la plataforma: {cfg.platform.get('mensajeria') or 'sin decidir (`forge platform`)'}")
     return 0
 
 
@@ -318,6 +329,9 @@ def main(argv: list[str] | None = None) -> int:
     pt = sub.add_parser("patterns", help="catálogo de patrones disponibles; con un id muestra su ficha")
     pt.add_argument("id", nargs="?")
     pt.add_argument("--categoria", help="filtra por categoría (creacional, estructural, comportamiento, dominio, aplicación, integración, persistencia, resiliencia, infraestructura)")
+    pl = sub.add_parser("platform", help="registra las decisiones de la plataforma (decisiones/plataforma.toml): el canal de eventos")
+    pl.add_argument("--messaging", choices=list(decisions.MENSAJERIAS), help="; ".join(f"{k}: {v}" for k, v in decisions.MENSAJERIAS.items()))
+    pl.add_argument("--why", default="", help="justificación del canal elegido")
     de = sub.add_parser("decide", help="registra las decisiones del arquitecto para un dominio (decisiones/<dominio>.toml)")
     de.add_argument("name")
     de.add_argument("--lang", choices=list(config.LANGUAGES)); de.add_argument("--arch", choices=list(decisions.ARCHITECTURES))
@@ -373,6 +387,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_patterns(cfg, a.id, a.categoria)
     if a.cmd == "decide":
         return cmd_decide(cfg, a)
+    if a.cmd == "platform":
+        return cmd_platform(cfg, a)
     if a.cmd == "check":
         d = _need_domain(cfg, a.name)
         print(f"✔ decisiones de «{d.context}» válidas: {d.language} · {d.architecture} · {d.style} · {d.database} · patrones: "

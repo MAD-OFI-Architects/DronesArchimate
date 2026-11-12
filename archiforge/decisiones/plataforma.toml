@@ -1,0 +1,4 @@
+mensajeria = "rabbitmq"      # rabbitmq | memoria
+
+[justificacion]
+mensajeria = "Los eventos entre contextos deben sobrevivir a reinicios y a la caída de un suscriptor."

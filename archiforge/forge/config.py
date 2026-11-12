@@ -73,6 +73,7 @@ class Config:
     decisions_dir: Path = Path("decisiones")
     raw: dict = field(default_factory=dict)
     policy: dict = field(default_factory=dict)     # [policy] de forge.toml: reglas opcionales del equipo (sin sección, no se exige nada)
+    platform: dict = field(default_factory=dict)   # decisiones de la plataforma (decisiones/plataforma.toml): p. ej. el canal de eventos
     tool_root: Path = TOOL_ROOT       # raíz de la HERRAMIENTA; distinta de `root` cuando el proyecto vive aparte (TUI)
 
     def for_domain(self, d: Domain) -> "Config":
@@ -111,4 +112,5 @@ def load(path: Path) -> Config:
         policy=dict(raw.get("policy", {})),
     )
     cfg.domains = decisions.load_all(cfg)
+    cfg.platform = decisions.read_platform(cfg)
     return cfg

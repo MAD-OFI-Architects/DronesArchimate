@@ -363,3 +363,26 @@ def test_a_chosen_pattern_asks_where_it_applies_and_saves_it(env):
         saved = (info.root / "decisiones/intervenciones.toml").read_text(encoding="utf-8")
         assert 'strategy = { usar = true, aplicar_en = "el cálculo de horas-hombre de una orden" }' in saved
     run(go())
+
+
+def test_platform_screen_asks_for_the_event_channel_without_preselecting_it(env):
+    store, creds, info = env
+
+    async def go():
+        app = StudioApp(store, creds)
+        async with app.run_test(size=SIZE) as pilot:
+            await wait_for(pilot, lambda: app.screen.query_one(DataTable).row_count == 1)
+            await pilot.press("enter")
+            await wait_for(pilot, lambda: type(app.screen).__name__ == "DomainsScreen" and app.screen.query_one(DataTable).row_count == 9)
+            await wait_for(pilot, lambda: "sin decidir" in str(app.screen.query_one("#platform-text").render()))
+            await pilot.press("p")
+            await wait_for(pilot, lambda: type(app.screen).__name__ == "PlatformScreen")
+            assert app.screen.query_one("#mensajeria", Select).value is Select.NULL            # nada viene elegido
+            await pilot.click("#save")
+            await wait_for(pilot, lambda: "Elige el canal" in banner_text(app.screen))           # no se guarda sin elegir
+            app.screen.query_one("#mensajeria", Select).value = "rabbitmq"
+            await pilot.click("#save")
+            await wait_for(pilot, lambda: type(app.screen).__name__ == "DomainsScreen")
+            await wait_for(pilot, lambda: "rabbitmq" in str(app.screen.query_one("#platform-text").render()))
+        assert 'mensajeria = "rabbitmq"' in (Path(info.root) / "decisiones/plataforma.toml").read_text(encoding="utf-8")
+    run(go())

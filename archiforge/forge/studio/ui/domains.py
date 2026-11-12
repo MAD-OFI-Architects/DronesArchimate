@@ -19,7 +19,7 @@ DB = {"mongodb": "MongoDB", "postgresql": "PostgreSQL"}
 
 class DomainsScreen(Screen):
     BINDINGS = [("enter", "decide", "Decidir"), ("b", "build", "Construir"), ("a", "assemble", "Ensamblar"),
-                ("g", "agent", "Agente y tokens"), ("r", "reload", "Recargar"), ("escape", "app.pop_screen", "Proyectos")]
+                ("p", "platform", "Plataforma"), ("g", "agent", "Agente y tokens"), ("r", "reload", "Recargar"), ("escape", "app.pop_screen", "Proyectos")]
 
     def __init__(self, info: ProjectInfo):
         super().__init__()
@@ -35,6 +35,9 @@ class DomainsScreen(Screen):
                     yield Static("Dominios del modelo", classes="card-title")
                     yield DataTable(id="table", cursor_type="row", zebra_stripes=True)
                     yield Banner(id="banner")
+                with Vertical(classes="card", id="platform"):
+                    yield Static("Plataforma", classes="card-title")
+                    yield Static("…", id="platform-text")
                 with Vertical(classes="card", id="portfolio"):
                     yield Static("Políticas del proyecto", classes="card-title")
                     yield Static("…", id="rules")
@@ -92,6 +95,9 @@ class DomainsScreen(Screen):
             ok = line.startswith("✓")
             txt.append(line + "\n", style="#9ece6a" if ok else "#f7768e")
         self.query_one("#rules", Static).update(txt)
+        elegido = cfg.platform.get("mensajeria")
+        self.query_one("#platform-text", Static).update(
+            f"Canal de eventos: [b]{elegido}[/b]" if elegido else "[b $warning]Canal de eventos: sin decidir[/]  [dim]· pulsa [b]p[/b] para decidirlo[/]")
         self.query_one("#portfolio").display = bool(rules)         # sin políticas declaradas, el panel no existe
         self.query_one(Banner).clear()
         if not any(r.decided for r in rows):
@@ -130,6 +136,11 @@ class DomainsScreen(Screen):
         if r and self.studio:
             from .decision import DecisionScreen
             self.app.push_screen(DecisionScreen(self.studio, r.context), lambda saved: saved and self.action_reload())
+
+    def action_platform(self) -> None:
+        if self.studio:
+            from .platform import PlatformScreen
+            self.app.push_screen(PlatformScreen(self.studio), lambda saved: saved and self.action_reload())
 
     def action_reload(self) -> None:
         self.load()

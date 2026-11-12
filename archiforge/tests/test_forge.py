@@ -232,6 +232,7 @@ def test_dryrun_end_to_end_with_fake_agent(tmp_path):
     r = run("decide", "Repuestos del Taller", "--lang", "python", "--arch", "hexagonal", "--style", "microservicio", "--db", "postgresql",
             "--patterns", "cqrs,memento,cache,cifrado,eventos,outbox", "--why", "lenguaje=x")
     assert r.returncode == 0, r.stderr
+    assert run("platform", "--messaging", "memoria").returncode == 0                  # el canal de eventos lo decide el arquitecto
     r = run("build", "Repuestos del Taller", "--laps", "1", "--skip-doctor")
     assert r.returncode == 0, r.stdout[-2000:] + r.stderr[-500:]
     assert json.loads(run("-d", "Repuestos del Taller", "next").stdout.split("\n", 2)[-1] if False else (work / ".forge-dry/repuestos-del-taller/state.json").read_text())["S60-report"]["status"] == "passed"

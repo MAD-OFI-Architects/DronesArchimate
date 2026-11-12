@@ -53,6 +53,17 @@ def bus_topics(ir: dict, cfg: Config, manifest: dict) -> dict:
 
 
 # ----------------------------------------------------------------------------- docs
+def mensajeria(cfg: Config, bt: dict) -> str:
+    """Canal de eventos decidido por el arquitecto. Si el modelo tiene eventos entre contextos y no se decidió, no se elige por él."""
+    m = cfg.platform.get("mensajeria")
+    if m is None and bt["topics"]:
+        from .decisions import MENSAJERIAS
+        raise SystemExit("Falta decidir el canal de eventos de la plataforma (el modelo tiene eventos entre contextos). "
+                         "Decide uno con `python -m forge platform --messaging <opción>`:\n" +
+                         "\n".join(f"  · {k}: {v}" for k, v in MENSAJERIAS.items()))
+    return m or "memoria"
+
+
 def contract_doc(ir: dict, cfg: Config, manifest: dict, bt: dict) -> str:
     L = ["# Contrato del bus de eventos y de las APIs de interoperabilidad", "",
          "> Contract-first: este documento manda sobre los servicios. Los **campos de cada evento son supuestos de diseño** "
@@ -63,7 +74,12 @@ def contract_doc(ir: dict, cfg: Config, manifest: dict, bt: dict) -> str:
          "```", "",
          f"- Publicar: `POST http://event-bus:{BUS_PORT}/publish` con el sobre.",
          "- Recibir: cada servicio expone `POST /events/{topic}` (el bus lo llama con el mismo sobre; responde 2xx si procesó **o** si ya lo había procesado).",
-         "- Entrega **al menos una vez** con reintentos: los consumidores DEBEN ser idempotentes por `eventId`.", "",
+         "- Entrega **al menos una vez** con reintentos: los consumidores DEBEN ser idempotentes por `eventId`.",
+         *(["- El bus guarda los mensajes en RabbitMQ (colas durables, una por tópico y suscriptor): sobreviven a reinicios del bus y del suscriptor.",
+            "- Si el suscriptor no responde 2xx, el mensaje se reintenta tras una espera; agotados los intentos queda en la cola de mensajes muertos (`GET /dlq`, `POST /dlq/reprocesar`).",
+            "- `POST /publish` responde **202** cuando el broker confirmó el mensaje y **503** si no está disponible: el emisor reintenta desde su bandeja de salida."]
+           if mensajeria(cfg, bt) == "rabbitmq" else
+           ["- El bus es un relé HTTP en memoria: reintenta la entrega con espera creciente, pero no conserva los mensajes si se reinicia."]), "",
          "## Tópicos", "", "| Tópico | Publica | Suscriptores | Descripción |", "|---|---|---|---|"]
     for t in bt["topics"]:
         L.append(f"| `{t['topic']}` | {t['publisher']}{' (real)' if t['publisher_real'] else ' (simulado)'} | "
@@ -88,67 +104,7 @@ def contract_doc(ir: dict, cfg: Config, manifest: dict, bt: dict) -> str:
 
 
 # ----------------------------------------------------------------------------- código de bus y simuladores
-BUS_PY = r'''"""Bus de eventos por tópicos (hace el papel de RabbitMQ / Azure Service Bus). Solo biblioteca estándar."""
-import json, os, threading, time, urllib.request
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-
-CFG = json.load(open(os.environ.get("TOPICS_FILE", "topics.json"), encoding="utf-8"))
-SUBS = {t["topic"]: [s["url"] for s in t["subscribers"]] for t in CFG["topics"]}
-LOG, LOCK = [], threading.Lock()
-
-
-def deliver(url, envelope, attempts=5):
-    for i in range(attempts):
-        try:
-            req = urllib.request.Request(url, json.dumps(envelope).encode(), {"Content-Type": "application/json"}, method="POST")
-            with urllib.request.urlopen(req, timeout=5) as r:
-                if 200 <= r.status < 300:
-                    return True
-        except Exception:
-            pass
-        time.sleep(min(2 ** i * 0.3, 5))
-    return False
-
-
-class H(BaseHTTPRequestHandler):
-    def _send(self, code, body):
-        data = json.dumps(body).encode()
-        self.send_response(code); self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(data))); self.end_headers(); self.wfile.write(data)
-
-    def do_GET(self):
-        if self.path == "/health":
-            return self._send(200, {"status": "ok"})
-        if self.path == "/events":
-            with LOCK:
-                return self._send(200, LOG[-200:])
-        if self.path == "/topics":
-            return self._send(200, CFG)
-        self._send(404, {"error": "no existe"})
-
-    def do_POST(self):
-        if self.path != "/publish":
-            return self._send(404, {"error": "no existe"})
-        try:
-            env = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
-            topic = env["topic"]; env["eventId"]
-        except Exception:
-            return self._send(400, {"error": "sobre inválido: se requieren topic y eventId"})
-        urls = SUBS.get(topic, [])
-        entry = {"topic": topic, "eventId": env["eventId"], "subscribers": urls, "delivered": {}}
-        with LOCK:
-            LOG.append(entry)
-        for u in urls:
-            threading.Thread(target=lambda u=u: entry["delivered"].__setitem__(u, deliver(u, env)), daemon=True).start()
-        self._send(202, {"accepted": True, "subscribers": len(urls)})
-
-    def log_message(self, *a):
-        pass
-
-
-if __name__ == "__main__":
-    ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("PORT", "5100"))), H).serve_forever()
-'''
+BUS_PY = (SKELETONS / "bus.py.tmpl").read_text(encoding="utf-8")
 
 SIM_PY = r'''"""Simuladores de los contextos que NO se implementan (interoperabilidad simulada). Solo biblioteca estándar.
 - Reciben eventos: POST /events/{topic}         (GET /received para inspeccionarlos)
@@ -228,12 +184,42 @@ if __name__ == "__main__":
     ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("PORT", "5110"))), H).serve_forever()
 '''
 
+BUS_DOCKER = '''FROM python:3.12-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+ENV PYTHONUNBUFFERED=1
+CMD ["python", "bus.py"]
+'''
+
 PY_DOCKER = '''FROM python:3.12-slim
 WORKDIR /app
 COPY . .
 ENV PYTHONUNBUFFERED=1
 CMD ["python", "{script}"]
 '''
+
+
+BUS_README_MEMORIA = """# Bus de eventos por tópicos (relé HTTP en memoria)
+
+Los servicios publican con `POST /publish` y el bus entrega a cada suscriptor por `POST /events/{topic}`, con reintentos y
+espera creciente. No usa broker: **no conserva los mensajes en vuelo si se reinicia**. Contrato: `../docs/contrato-bus.md`.
+Para mensajes durables y cola de mensajes muertos, decide `mensajeria = "rabbitmq"` (`python -m forge platform`).
+"""
+
+BUS_README = """# Bus de eventos por tópicos (sobre RabbitMQ)
+
+Los servicios publican con `POST /publish` y reciben con `POST /events/{topic}`; entre ambos, RabbitMQ guarda los mensajes.
+Contrato: `../docs/contrato-bus.md`.
+
+- Por cada (tópico, suscriptor) hay una cola durable `<tópico>::<contexto>`, una cola de espera `.retry` y una cola de
+  mensajes muertos `.dlq`. Tras `BUS_MAX_INTENTOS` (5) entregas fallidas el mensaje queda en la `.dlq`.
+- `GET /dlq` cuenta los mensajes muertos por cola; `POST /dlq/reprocesar` los devuelve a su cola principal.
+- `GET /events` muestra las últimas publicaciones; `GET /topics`, el catálogo.
+- Consola de RabbitMQ: `http://localhost:${RABBITMQ_UI_PORT:-15672}` (usuario y clave `guest`).
+- Sin `RABBITMQ_URL` el bus trabaja en memoria (solo pruebas): no conserva nada al reiniciarse.
+"""
 
 
 def _compose(cfg: Config, bt: dict, services_rel: str, with_frontend: bool, ir: dict | None = None) -> tuple[str, str]:
@@ -249,7 +235,11 @@ def _compose(cfg: Config, bt: dict, services_rel: str, with_frontend: bool, ir: 
     if "postgresql" in dbs:
         L.append("  postgres:\n    image: postgres:16\n    environment:\n      POSTGRES_USER: forge\n      POSTGRES_PASSWORD: forge\n      POSTGRES_DB: forge\n"
                  "    volumes:\n      - ./init-postgres.sql:/docker-entrypoint-initdb.d/init.sql:ro\n    healthcheck:\n      test: [\"CMD-SHELL\", \"pg_isready -U forge -d forge\"]\n      interval: 5s\n      timeout: 5s\n      retries: 20")
-    L += [f"  event-bus:\n    build: ./event-bus\n    environment:\n      PORT: \"{BUS_PORT}\"\n      TOPICS_FILE: /app/topics.json\n    healthcheck:\n      test: {py_hc % BUS_PORT}\n      interval: 5s\n      timeout: 5s\n      retries: 20",
+    rabbit = mensajeria(cfg, bt) == "rabbitmq"
+    if rabbit:
+        L.append("  rabbitmq:\n    image: rabbitmq:3.13-management-alpine\n    ports:\n      - \"${RABBITMQ_UI_PORT:-15672}:15672\"\n    healthcheck:\n      test: [\"CMD\", \"rabbitmq-diagnostics\", \"-q\", \"ping\"]\n      interval: 5s\n      timeout: 10s\n      retries: 20")
+    espera_broker = "\n      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/\n    depends_on:\n      rabbitmq:\n        condition: service_healthy" if rabbit else ""
+    L += [f"  event-bus:\n    build: ./event-bus\n    environment:\n      PORT: \"{BUS_PORT}\"\n      TOPICS_FILE: /app/topics.json{espera_broker}\n    healthcheck:\n      test: {py_hc % BUS_PORT}\n      interval: 5s\n      timeout: 5s\n      retries: 20",
           f"  simulators:\n    build: ./simulators\n    environment:\n      PORT: \"{SIM_PORT}\"\n      BUS_URL: http://event-bus:{BUS_PORT}\n    depends_on:\n      event-bus:\n        condition: service_healthy\n    healthcheck:\n      test: {py_hc % SIM_PORT}\n      interval: 5s\n      timeout: 5s\n      retries: 20"]
     for d in cfg.domains:
         env = service_env(d, BUS_PORT, SIM_PORT, api_urls=interconexion.api_urls(ir, d, cfg.domains, SIM_PORT) if ir else None)
@@ -577,8 +567,13 @@ def platform(cfg: Config, ir: dict, manifest: dict, target: Path, services_rel: 
     files["docs/contrato-bus.md"] = contract_doc(ir, cfg, manifest, bt)
     files["event-bus/bus.py"] = BUS_PY
     files["event-bus/topics.json"] = json.dumps(bt, indent=2, ensure_ascii=False)
-    files["event-bus/Dockerfile"] = PY_DOCKER.format(script="bus.py")
-    files["event-bus/README.md"] = "# Bus de eventos por tópicos\n\nSimula RabbitMQ/Azure Service Bus (publicar/suscribir con reintentos). Contrato: `../docs/contrato-bus.md`.\n"
+    if mensajeria(cfg, bt) == "rabbitmq":
+        files["event-bus/Dockerfile"] = BUS_DOCKER
+        files["event-bus/requirements.txt"] = "pika==1.3.2\n"
+        files["event-bus/README.md"] = BUS_README
+    else:
+        files["event-bus/Dockerfile"] = PY_DOCKER.format(script="bus.py")
+        files["event-bus/README.md"] = BUS_README_MEMORIA
     emits, apis = [], []
     for s in manifest["simulated"]:
         for ev in s["emits"]:

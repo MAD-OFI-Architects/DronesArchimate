@@ -167,6 +167,14 @@ class Studio:
         self.reload()
         return p
 
+    def save_platform(self, mensajeria: str, why: str = "") -> Path:
+        try:
+            p = decisions.write_platform(self.cfg, mensajeria, why)
+        except SystemExit as e:
+            raise StudioError(str(e)) from e
+        self.reload()
+        return p
+
     def policy_findings(self) -> list[str]:
         """Estado de las políticas que el equipo declaró en forge.toml. Vacío si el proyecto no declara ninguna."""
         from .. import gates as G

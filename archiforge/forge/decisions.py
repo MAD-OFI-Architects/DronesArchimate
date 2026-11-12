@@ -11,6 +11,11 @@ ARCHITECTURES = ("clean-ddd", "hexagonal")
 STYLES = ("microservicio", "soa", "monolito-modular")
 DATABASES = ("mongodb", "postgresql")
 DECISION_KEYS = ("lenguaje", "arquitectura", "estilo", "base_de_datos")
+PLATAFORMA = "plataforma"
+MENSAJERIAS = {
+    "rabbitmq": "los eventos viven en RabbitMQ: colas durables por suscriptor, reintentos con espera y cola de mensajes muertos",
+    "memoria": "relé HTTP en memoria: sin broker ni persistencia (los mensajes en vuelo se pierden al reiniciar el bus)",
+}
 
 
 CATALOG_ORDER = ("patrones", "creacionales", "estructurales", "comportamiento", "dominio", "integracion")
@@ -58,7 +63,7 @@ def read(file: Path) -> Domain:
 
 def load_all(cfg: Config) -> list[Domain]:
     d = cfg.decisions_dir
-    out = [read(f) for f in sorted(d.glob("*.toml"))] if d.exists() else []
+    out = [read(f) for f in sorted(d.glob("*.toml")) if f.stem != PLATAFORMA] if d.exists() else []
     seen: dict[int, str] = {}
     for x in out:           # puertos únicos entre dominios decididos
         if x.port in seen:
@@ -106,6 +111,32 @@ def validate(cfg: Config, d: Domain) -> tuple[list[str], list[str]]:
 
 def _q(s: str) -> str:
     return '"' + str(s).replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def read_platform(cfg: Config) -> dict:
+    """Decisiones de la plataforma (decisiones/plataforma.toml); vacío si el arquitecto aún no decidió nada."""
+    f = cfg.decisions_dir / f"{PLATAFORMA}.toml"
+    if not f.exists():
+        return {}
+    raw = tomllib.loads(f.read_text(encoding="utf-8"))
+    m = raw.get("mensajeria")
+    if m is not None and m not in MENSAJERIAS:
+        raise SystemExit(f"{f.name}: mensajeria «{m}» no existe. Opciones: {', '.join(MENSAJERIAS)}.")
+    return {"mensajeria": m, "justificacion": dict(raw.get("justificacion", {}))}
+
+
+def write_platform(cfg: Config, mensajeria: str, why: str = "") -> Path:
+    if mensajeria not in MENSAJERIAS:
+        raise SystemExit(f"mensajeria «{mensajeria}» no existe. Opciones: {', '.join(MENSAJERIAS)}.")
+    cfg.decisions_dir.mkdir(parents=True, exist_ok=True)
+    L = ["# Decisiones de la plataforma — las toma el arquitecto; la herramienta ejecuta fiel a esto.",
+         f"mensajeria = {_q(mensajeria)}      # {' | '.join(MENSAJERIAS)}"]
+    if why.strip():
+        L += ["", "[justificacion]", f"mensajeria = {_q(why.strip())}"]
+    path = cfg.decisions_dir / f"{PLATAFORMA}.toml"
+    path.write_text("\n".join(L) + "\n", encoding="utf-8")
+    cfg.platform = read_platform(cfg)
+    return path
 
 
 def write(cfg: Config, d: Domain) -> Path:

@@ -1,5 +1,6 @@
 # Dry-run: pipeline completo con un agente SIMULADO (tools/fake_agent.py). No gasta agente real ni docker ni npm.
 # Uso: python -m forge -c forge.dryrun.toml decide "Repuestos del Taller" --lang python --arch hexagonal --style microservicio --db postgresql
+#      python -m forge -c forge.dryrun.toml platform --messaging memoria
 #      python -m forge -c forge.dryrun.toml build "Repuestos del Taller" --laps 1 --skip-doctor
 [inputs]
 archimate = "../diseno/modelo/drones-mantenimiento.archimate"
