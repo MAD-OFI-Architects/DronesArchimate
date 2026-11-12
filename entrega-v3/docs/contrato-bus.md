@@ -70,7 +70,7 @@ Campos del `payload`:
   "dronId": "string",
   "cerradaEn": "string (ISO 8601)",
   "horasHombre": "number",
-  "consumos": "[{referencia: string, cantidad: int, numeroSerie: string|null}]"
+  "consumos": "[{referencia: string, cantidad: int, numeroSerie: string|null, serieRetirada: string|null, horaDeCorte: number|null}]"
 }
 ```
 Ejemplo:
@@ -85,7 +85,16 @@ Ejemplo:
     {
       "referencia": "HEL-T40",
       "cantidad": 2,
-      "numeroSerie": null
+      "numeroSerie": null,
+      "serieRetirada": null,
+      "horaDeCorte": null
+    },
+    {
+      "referencia": "BAT-22K",
+      "cantidad": 1,
+      "numeroSerie": "BAT-0412",
+      "serieRetirada": "BAT-0377",
+      "horaDeCorte": 112.5
     }
   ]
 }

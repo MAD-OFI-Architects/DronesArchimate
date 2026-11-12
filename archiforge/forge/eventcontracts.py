@@ -21,10 +21,11 @@ DEFAULTS: dict[str, dict] = {
     "Orden de trabajo cerrada": {
         "descripcion": "Intervenciones cerró una OT: consumos reales, horas-hombre y componentes con su hora de corte.",
         "payload": {"ordenId": "string (uuid)", "paradaId": "string (uuid)", "dronId": "string", "cerradaEn": "string (ISO 8601)",
-                    "horasHombre": "number", "consumos": "[{referencia: string, cantidad: int, numeroSerie: string|null}]"},
+                    "horasHombre": "number", "consumos": "[{referencia: string, cantidad: int, numeroSerie: string|null, serieRetirada: string|null, horaDeCorte: number|null}]"},
         "sample": {"ordenId": "22222222-2222-4222-8222-222222222222", "paradaId": "11111111-1111-4111-8111-111111111111",
                    "dronId": "ADV-03", "cerradaEn": "2026-11-20T15:30:00Z", "horasHombre": 3.5,
-                   "consumos": [{"referencia": "HEL-T40", "cantidad": 2, "numeroSerie": None}]},
+                   "consumos": [{"referencia": "HEL-T40", "cantidad": 2, "numeroSerie": None, "serieRetirada": None, "horaDeCorte": None},
+                                {"referencia": "BAT-22K", "cantidad": 1, "numeroSerie": "BAT-0412", "serieRetirada": "BAT-0377", "horaDeCorte": 112.5}]},
     },
     "Faltante detectado": {
         "descripcion": "Repuestos del Taller no pudo reservar un repuesto: la OT debe esperar.",
