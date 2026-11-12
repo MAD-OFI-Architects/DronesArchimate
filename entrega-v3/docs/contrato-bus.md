@@ -18,6 +18,9 @@
 - Publicar: `POST http://event-bus:5100/publish` con el sobre.
 - Recibir: cada servicio expone `POST /events/{topic}` (el bus lo llama con el mismo sobre; responde 2xx si procesó **o** si ya lo había procesado).
 - Entrega **al menos una vez** con reintentos: los consumidores DEBEN ser idempotentes por `eventId`.
+- El bus guarda los mensajes en RabbitMQ (colas durables, una por tópico y suscriptor): sobreviven a reinicios del bus y del suscriptor.
+- Si el suscriptor no responde 2xx, el mensaje se reintenta tras una espera; agotados los intentos queda en la cola de mensajes muertos (`GET /dlq`, `POST /dlq/reprocesar`).
+- `POST /publish` responde **202** cuando el broker confirmó el mensaje y **503** si no está disponible: el emisor reintenta desde su bandeja de salida.
 
 ## Tópicos
 
