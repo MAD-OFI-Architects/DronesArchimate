@@ -167,9 +167,9 @@ class Studio:
         self.reload()
         return p
 
-    def save_platform(self, mensajeria: str, gateway: str, why: dict | None = None) -> Path:
+    def save_platform(self, elecciones: dict, why: dict | None = None, imagenes: dict | None = None) -> Path:
         try:
-            p = decisions.write_platform(self.cfg, mensajeria, gateway, why)
+            p = decisions.write_platform(self.cfg, elecciones, why, imagenes)
         except SystemExit as e:
             raise StudioError(str(e)) from e
         self.reload()

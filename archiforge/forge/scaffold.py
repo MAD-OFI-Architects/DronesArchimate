@@ -23,7 +23,7 @@ def topic(context: str, event: str) -> str:
     return f"{kebab(context)}.{kebab(event)}.v1"
 
 
-def bus_topics(ir: dict, cfg: Config, manifest: dict) -> dict:
+def bus_topics(ir: dict, cfg: Config, manifest: dict, con_simuladores: bool = True) -> dict:
     ctx = {c["name"]: c for c in ir["contexts"]}
     api_events = {e for r in ir["context_relations"] if r["mechanism"].startswith("API") for e in r["events"]}
     real = {d.context: d for d in cfg.domains}
@@ -41,8 +41,10 @@ def bus_topics(ir: dict, cfg: Config, manifest: dict) -> dict:
                     if o["name"] in real:
                         d = real[o["name"]]
                         url = f"http://{d.slug}:{d.port}/events/{topic(c['name'], ev)}"
-                    else:
+                    elif con_simuladores:
                         url = f"http://simulators:{SIM_PORT}/events/{topic(c['name'], ev)}"
+                    else:
+                        continue          # sin simuladores no hay a quién entregar los eventos de los contextos no construidos
                     subs.append({"context": o["name"], "url": url})
             if subs:
                 spec = eventcontracts.for_event(table, ev)
@@ -53,27 +55,46 @@ def bus_topics(ir: dict, cfg: Config, manifest: dict) -> dict:
 
 
 # ----------------------------------------------------------------------------- docs
+_ARTICULO = {"mensajeria": "el canal de eventos", "gateway": "el gateway", "frontend": "el frontend", "despliegue": "el despliegue", "simuladores": "los simuladores"}
+_FLAG = {"mensajeria": "messaging", "gateway": "gateway", "frontend": "frontend", "despliegue": "deployment", "simuladores": "simulators"}
+
+
+def decidida(cfg: Config, clave: str) -> str:
+    """Decisión de la plataforma tomada por el arquitecto; si falta, la herramienta no elige: se detiene y lista las opciones."""
+    from .decisions import ELECCIONES_DE_PLATAFORMA
+    v = cfg.platform.get(clave)
+    if v is None:
+        opciones = ELECCIONES_DE_PLATAFORMA[clave][1]
+        raise SystemExit(f"Falta decidir {_ARTICULO[clave]} de la plataforma. Decide uno con `python -m forge platform --{_FLAG[clave]} <opción>`:\n" +
+                         "\n".join(f"  · {k}: {v}" for k, v in opciones.items()))
+    return v
+
+
 def mensajeria(cfg: Config, bt: dict) -> str:
-    """Canal de eventos decidido por el arquitecto. Si el modelo tiene eventos entre contextos y no se decidió, no se elige por él."""
-    m = cfg.platform.get("mensajeria")
-    if m is None and bt["topics"]:
-        from .decisions import MENSAJERIAS
-        raise SystemExit("Falta decidir el canal de eventos de la plataforma (el modelo tiene eventos entre contextos). "
-                         "Decide uno con `python -m forge platform --messaging <opción>`:\n" +
-                         "\n".join(f"  · {k}: {v}" for k, v in MENSAJERIAS.items()))
-    return m or "memoria"
+    """Canal de eventos. Si el modelo no tiene eventos entre contextos no hace falta decidirlo."""
+    return decidida(cfg, "mensajeria") if bt["topics"] else (cfg.platform.get("mensajeria") or "memoria")
 
 
 def gateway(cfg: Config, with_frontend: bool) -> str:
-    """Gateway decidido por el arquitecto. La plataforma de humo por dominio (sin frontend) es interna de la herramienta: siempre nginx."""
-    if not with_frontend:
-        return "nginx"
-    g = cfg.platform.get("gateway")
-    if g is None:
-        from .decisions import GATEWAYS
-        raise SystemExit("Falta decidir el gateway de la plataforma. Decide uno con `python -m forge platform --gateway <opción>`:\n" +
-                         "\n".join(f"  · {k}: {v}" for k, v in GATEWAYS.items()))
-    return g
+    """La plataforma de humo por dominio (sin frontend) es interna de la herramienta: siempre nginx."""
+    return decidida(cfg, "gateway") if with_frontend else "nginx"
+
+
+def simuladores(cfg: Config, with_frontend: bool) -> str:
+    return decidida(cfg, "simuladores") if with_frontend else "generar"
+
+
+def despliegue(cfg: Config, with_frontend: bool) -> str:
+    return decidida(cfg, "despliegue") if with_frontend else "docker-compose"
+
+
+def con_frontend(cfg: Config) -> bool:
+    return decidida(cfg, "frontend") == "microfrontends"
+
+
+def _img(cfg: Config, nombre: str) -> str:
+    from .decisions import imagen
+    return imagen(cfg, nombre)
 
 
 def contract_doc(ir: dict, cfg: Config, manifest: dict, bt: dict) -> str:
@@ -242,60 +263,69 @@ def _compose(cfg: Config, bt: dict, services_rel: str, with_frontend: bool, ir: 
          "name: ${COMPOSE_PROJECT:-drones-mantenimiento}", "services:"]
     dbs = {d.database for d in cfg.domains}
     if "mongodb" in dbs:
-        L.append("  mongo:\n    image: mongo:7\n    command: [\"--replSet\", \"rs0\", \"--bind_ip_all\"]\n    healthcheck:\n      test: [\"CMD\", \"mongosh\", \"--quiet\", \"--eval\", "
+        L.append(f"  mongo:\n    image: {_img(cfg, 'mongo')}\n    command: [\"--replSet\", \"rs0\", \"--bind_ip_all\"]\n    healthcheck:\n      test: [\"CMD\", \"mongosh\", \"--quiet\", \"--eval\", "
                  "\"try { rs.status().ok } catch (e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'mongo:27017'}]}).ok }\"]\n      interval: 5s\n      timeout: 5s\n      retries: 20")
     if "postgresql" in dbs:
-        L.append("  postgres:\n    image: postgres:16\n    environment:\n      POSTGRES_USER: forge\n      POSTGRES_PASSWORD: forge\n      POSTGRES_DB: forge\n"
+        L.append(f"  postgres:\n    image: {_img(cfg, 'postgres')}\n    environment:\n      POSTGRES_USER: forge\n      POSTGRES_PASSWORD: forge\n      POSTGRES_DB: forge\n"
                  "    volumes:\n      - ./init-postgres.sql:/docker-entrypoint-initdb.d/init.sql:ro\n    healthcheck:\n      test: [\"CMD-SHELL\", \"pg_isready -U forge -d forge\"]\n      interval: 5s\n      timeout: 5s\n      retries: 20")
     rabbit = mensajeria(cfg, bt) == "rabbitmq"
     if rabbit:
-        L.append("  rabbitmq:\n    image: rabbitmq:3.13-management-alpine\n    ports:\n      - \"${RABBITMQ_UI_PORT:-15672}:15672\"\n    healthcheck:\n      test: [\"CMD\", \"rabbitmq-diagnostics\", \"-q\", \"ping\"]\n      interval: 5s\n      timeout: 10s\n      retries: 20")
+        L.append(f"  rabbitmq:\n    image: {_img(cfg, 'rabbitmq')}\n    ports:\n      - \"${{RABBITMQ_UI_PORT:-15672}}:15672\"\n    healthcheck:\n      test: [\"CMD\", \"rabbitmq-diagnostics\", \"-q\", \"ping\"]\n      interval: 5s\n      timeout: 10s\n      retries: 20")
     espera_broker = "\n      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/\n    depends_on:\n      rabbitmq:\n        condition: service_healthy" if rabbit else ""
-    L += [f"  event-bus:\n    build: ./event-bus\n    environment:\n      PORT: \"{BUS_PORT}\"\n      TOPICS_FILE: /app/topics.json{espera_broker}\n    healthcheck:\n      test: {py_hc % BUS_PORT}\n      interval: 5s\n      timeout: 5s\n      retries: 20",
-          f"  simulators:\n    build: ./simulators\n    environment:\n      PORT: \"{SIM_PORT}\"\n      BUS_URL: http://event-bus:{BUS_PORT}\n    depends_on:\n      event-bus:\n        condition: service_healthy\n    healthcheck:\n      test: {py_hc % SIM_PORT}\n      interval: 5s\n      timeout: 5s\n      retries: 20"]
+    L += [f"  event-bus:\n    build: ./event-bus\n    environment:\n      PORT: \"{BUS_PORT}\"\n      TOPICS_FILE: /app/topics.json{espera_broker}\n    healthcheck:\n      test: {py_hc % BUS_PORT}\n      interval: 5s\n      timeout: 5s\n      retries: 20"]
+    sim_on = simuladores(cfg, with_frontend) == "generar"
+    if sim_on:
+        L.append(f"  simulators:\n    build: ./simulators\n    environment:\n      PORT: \"{SIM_PORT}\"\n      BUS_URL: http://event-bus:{BUS_PORT}\n    depends_on:\n      event-bus:\n        condition: service_healthy\n    healthcheck:\n      test: {py_hc % SIM_PORT}\n      interval: 5s\n      timeout: 5s\n      retries: 20")
+
     for d in cfg.domains:
-        env = service_env(d, BUS_PORT, SIM_PORT, api_urls=interconexion.api_urls(ir, d, cfg.domains, SIM_PORT) if ir else None)
+        env = service_env(d, BUS_PORT, SIM_PORT, api_urls=interconexion.api_urls(ir, d, cfg.domains, SIM_PORT, sim_on) if ir else None, simulators=sim_on)
         dep = "mongo" if d.database == "mongodb" else "postgres"
         L.append(f"  {d.slug}:\n    build: {services_rel}/{d.slug}\n    environment:\n" + "\n".join(f'      {k}: "{v}"' for k, v in env.items()) +
                  f"\n    depends_on:\n      {dep}:\n        condition: service_healthy\n      event-bus:\n        condition: service_healthy")
-    deps = "\n      - ".join([d.slug for d in cfg.domains] + ["simulators"])
+    deps = "\n      - ".join([d.slug for d in cfg.domains] + (["simulators"] if sim_on else []))
     if gateway(cfg, with_frontend) == "propio":
         # sin gateway generado: cada servicio publica su puerto para que el gateway del equipo los enrute
         for d in cfg.domains:
             i = next(i for i, x in enumerate(L) if x.startswith(f"  {d.slug}:\n"))
             L[i] = L[i].replace("\n    environment:", f"\n    ports:\n      - \"{d.port}:{d.port}\"\n    environment:", 1)
-    elif with_frontend:
+    elif with_frontend and con_frontend(cfg):
         L.append(f"  gateway:\n    build: ./frontend\n    ports:\n      - \"${{GATEWAY_PORT:-{GATEWAY_PORT}}}:80\"\n    depends_on:\n      - {deps}")
-    else:      # smoke por dominio: solo el proxy; el microfrontend se verifica con su propio build y pruebas
-        L.append(f"  gateway:\n    image: nginx:1.27-alpine\n    volumes:\n      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro\n    ports:\n      - \"${{GATEWAY_PORT:-{GATEWAY_PORT}}}:80\"\n    depends_on:\n      - {deps}")
+    else:      # solo el proxy (smoke por dominio, o producto sin frontend): sin microfrontends que servir
+        L.append(f"  gateway:\n    image: {_img(cfg, 'nginx')}\n    volumes:\n      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro\n    ports:\n      - \"${{GATEWAY_PORT:-{GATEWAY_PORT}}}:80\"\n    depends_on:\n      - {deps}")
     sql = "\n".join(f"CREATE DATABASE {d.slug.replace('-', '_')};" for d in cfg.domains if d.database == "postgresql") + "\n"
     return "\n".join(L) + "\n", sql
 
 
-def gateway_doc(cfg: Config) -> str:
+def gateway_doc(cfg: Config, sim: bool = True, front: bool = True) -> str:
     """Rutas que el frontend y las demás piezas esperan, para quien configure su propio gateway."""
     L = ["# Rutas del gateway", "",
          "El generador no incluye gateway: el equipo configura el suyo (Kong, Traefik, un balanceador de la nube, etc.) con estas rutas.", "",
          "## Hacia los servicios", "", "| Ruta pública | Destino |", "|---|---|"]
     for d in cfg.domains:
         L.append(f"| `/api/{kebab(d.context).split('-')[0]}/…` | `http://{d.slug}:{d.port}/api/…` (puerto publicado: `{d.port}`) |")
-    L += [f"| `/sim/…` | `http://simulators:{SIM_PORT}/` |", f"| `/bus/…` | `http://event-bus:{BUS_PORT}/` |", "",
-          "## Frontend", "",
-          "Cada microfrontend se construye con `npm run build` en su carpeta (`frontend/mfe-*`). El gateway o un servidor estático debe servir:", "",
-          "- `/` → `frontend/mfe-shell/dist` (con `index.html` como respaldo de las rutas de la aplicación).",
-          "- `/mfe/<etiqueta>/<etiqueta>.js` → `frontend/<etiqueta>/dist/<etiqueta>.js` de cada remote.",
-          "- `/mfe-manifest.json` → el del shell.", ""]
+    if sim:
+        L.append(f"| `/sim/…` | `http://simulators:{SIM_PORT}/` |")
+    L += [f"| `/bus/…` | `http://event-bus:{BUS_PORT}/` |", ""]
+    if front:
+        L += ["## Frontend", "",
+              "Cada microfrontend se construye con `npm run build` en su carpeta (`frontend/mfe-*`). El gateway o un servidor estático debe servir:", "",
+              "- `/` → `frontend/mfe-shell/dist` (con `index.html` como respaldo de las rutas de la aplicación).",
+              "- `/mfe/<etiqueta>/<etiqueta>.js` → `frontend/<etiqueta>/dist/<etiqueta>.js` de cada remote.",
+              "- `/mfe-manifest.json` → el del shell.", ""]
     return "\n".join(L)
 
 
-def _nginx(cfg: Config) -> str:
+def _nginx(cfg: Config, sim: bool = True, front: bool = True) -> str:
     loc = []
     for d in cfg.domains:
         short = kebab(d.context).split("-")[0]
         loc.append(f"  location /api/{short}/ {{ proxy_pass http://{d.slug}:{d.port}/api/; proxy_set_header Host $host; }}")
-    return ("server {\n  listen 80;\n  root /usr/share/nginx/html;\n  index index.html;\n" + "\n".join(loc) +
-             f"\n  location /sim/ {{ proxy_pass http://simulators:{SIM_PORT}/; }}\n  location /bus/ {{ proxy_pass http://event-bus:{BUS_PORT}/; }}\n  location /mfe/ {{ add_header Cache-Control no-cache; }}\n"
-            "  location / { try_files $uri /index.html; }\n}\n")
+    if sim:
+        loc.append(f"  location /sim/ {{ proxy_pass http://simulators:{SIM_PORT}/; }}")
+    loc.append(f"  location /bus/ {{ proxy_pass http://event-bus:{BUS_PORT}/; }}")
+    if front:
+        loc += ["  location /mfe/ { add_header Cache-Control no-cache; }", "  location / { try_files $uri /index.html; }"]
+    return "server {\n  listen 80;\n  root /usr/share/nginx/html;\n  index index.html;\n" + "\n".join(loc) + "\n}\n"
 
 
 # ----------------------------------------------------------------------------- frontend
@@ -573,11 +603,11 @@ def scaffold_shell(cfg: Config) -> list[str]:
         indent=2, ensure_ascii=False), encoding="utf-8")
     if gateway(cfg, True) == "nginx":
         copies = "\n".join(f"COPY --from=build /app/{m['tag']}/dist /usr/share/nginx/html/mfe/{m['tag']}" for m in metas)
-        (fe / "Dockerfile").write_text(DOCKERFILE_FRONTEND.format(copies=copies), encoding="utf-8")
+        (fe / "Dockerfile").write_text(DOCKERFILE_FRONTEND.format(copies=copies).replace("node:22-alpine", _img(cfg, "node")).replace("nginx:1.27-alpine", _img(cfg, "nginx")), encoding="utf-8")
     (fe / ".dockerignore").write_text("**/node_modules\n**/dist\n",
                                       encoding="utf-8")
     if gateway(cfg, True) == "nginx":
-        (fe / "nginx.conf").write_text(_nginx(cfg), encoding="utf-8")
+        (fe / "nginx.conf").write_text(_nginx(cfg, simuladores(cfg, True) == "generar"), encoding="utf-8")
     (fe / "README.md").write_text("# Microfrontends\n\nShell + un remote por **dominio** (Web Components); el shell filtra por rol. "
                                   "Cada remote lo construye el equipo dueño del dominio.\n", encoding="utf-8")
     return ["frontend/mfe-shell", "frontend/.dockerignore"] + (["frontend/Dockerfile", "frontend/nginx.conf"] if gateway(cfg, True) == "nginx" else [])
@@ -600,48 +630,56 @@ def platform(cfg: Config, ir: dict, manifest: dict, target: Path, services_rel: 
     """Plataforma común generada del ArchiMate: bus, simuladores, compose y contrato. cfg.domains = los dominios REALES de este ensamblado;
     todo lo demás se simula. Es determinista: dos personas con los mismos dominios obtienen exactamente lo mismo."""
     target.mkdir(parents=True, exist_ok=True)
-    bt = bus_topics(ir, cfg, manifest)
+    sim_on = simuladores(cfg, with_frontend) == "generar"
+    bt = bus_topics(ir, cfg, manifest, sim_on)
     files: dict[str, str] = {}
     files["docs/contrato-bus.md"] = contract_doc(ir, cfg, manifest, bt)
     files["event-bus/bus.py"] = BUS_PY
     files["event-bus/topics.json"] = json.dumps(bt, indent=2, ensure_ascii=False)
     if mensajeria(cfg, bt) == "rabbitmq":
-        files["event-bus/Dockerfile"] = BUS_DOCKER
+        files["event-bus/Dockerfile"] = BUS_DOCKER.replace("FROM python:3.12-slim", f"FROM {_img(cfg, 'python')}")
         files["event-bus/requirements.txt"] = "pika==1.3.2\n"
         files["event-bus/README.md"] = BUS_README
     else:
-        files["event-bus/Dockerfile"] = PY_DOCKER.format(script="bus.py")
+        files["event-bus/Dockerfile"] = _py_docker(cfg, "bus.py")
         files["event-bus/README.md"] = BUS_README_MEMORIA
-    emits, apis = [], []
-    for s in manifest["simulated"]:
-        for ev in s["emits"]:
-            t = next((x for x in bt["topics"] if x["event"] == ev and x["publisher"] == s["context"]), None)
-            if t:
-                emits.append({"context": s["context"], "context_slug": kebab(s["context"]), "event": ev, "event_slug": kebab(ev),
-                              "topic": t["topic"], "sample": t["sample"]})
-    for ctx_name, info in manifest["domains"].items():
-        for ac in info["acl"]:
-            if ac.get("upstream_real"):
-                continue          # el proveedor es un servicio real: no se simula
-            e = {"context": ac["upstream"], "context_slug": kebab(ac["upstream"]), "operation": ac["name"], "operation_slug": ac["slug"]}
-            if e not in apis:
-                apis.append(e)
-    files["simulators/simulators.py"] = SIM_PY
-    files["simulators/simulators.json"] = json.dumps({"emits": emits, "apis": apis}, indent=2, ensure_ascii=False)
-    files["simulators/Dockerfile"] = PY_DOCKER.format(script="simulators.py")
-    files["simulators/README.md"] = ("# Simuladores de los contextos no implementados\n\n" +
-                                     "\n".join(f"- **{s['context']}**: emite {s['emits'] or '—'}, se suscribe a {s['subscribes'] or '—'}, APIs {s['sync_apis'] or '—'}" for s in manifest["simulated"]) + "\n")
-    compose, sql = _compose(cfg, bt, services_rel, with_frontend, ir)
-    files["docker-compose.yml"], files["init-postgres.sql"] = compose, sql
+    if sim_on:
+        emits, apis = [], []
+        for s in manifest["simulated"]:
+            for ev in s["emits"]:
+                t = next((x for x in bt["topics"] if x["event"] == ev and x["publisher"] == s["context"]), None)
+                if t:
+                    emits.append({"context": s["context"], "context_slug": kebab(s["context"]), "event": ev, "event_slug": kebab(ev),
+                                  "topic": t["topic"], "sample": t["sample"]})
+        for ctx_name, info in manifest["domains"].items():
+            for ac in info["acl"]:
+                if ac.get("upstream_real"):
+                    continue          # el proveedor es un servicio real: no se simula
+                e = {"context": ac["upstream"], "context_slug": kebab(ac["upstream"]), "operation": ac["name"], "operation_slug": ac["slug"]}
+                if e not in apis:
+                    apis.append(e)
+        files["simulators/simulators.py"] = SIM_PY
+        files["simulators/simulators.json"] = json.dumps({"emits": emits, "apis": apis}, indent=2, ensure_ascii=False)
+        files["simulators/Dockerfile"] = _py_docker(cfg, "simulators.py")
+        files["simulators/README.md"] = ("# Simuladores de los contextos no implementados\n\n" +
+                                         "\n".join(f"- **{s['context']}**: emite {s['emits'] or '—'}, se suscribe a {s['subscribes'] or '—'}, APIs {s['sync_apis'] or '—'}" for s in manifest["simulated"]) + "\n")
+    if despliegue(cfg, with_frontend) == "docker-compose":
+        compose, sql = _compose(cfg, bt, services_rel, with_frontend, ir)
+        files["docker-compose.yml"], files["init-postgres.sql"] = compose, sql
+    front = (not with_frontend) or con_frontend(cfg)
     if gateway(cfg, with_frontend) == "propio":
-        files["docs/gateway-rutas.md"] = gateway_doc(cfg)
+        files["docs/gateway-rutas.md"] = gateway_doc(cfg, sim_on, front)
     else:
-        files["nginx.conf"] = _nginx(cfg)
+        files["nginx.conf"] = _nginx(cfg, sim_on, front)
     for rel, text in files.items():
         p = target / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(text, encoding="utf-8")
     return list(files)
+
+
+def _py_docker(cfg: Config, script: str) -> str:
+    return PY_DOCKER.format(script=script).replace("FROM python:3.12-slim", f"FROM {_img(cfg, 'python')}")
 
 
 def smoke_dir(cfg: Config, d) -> Path:
@@ -703,8 +741,9 @@ def domain_scaffold(cfg: Config, ir: dict, manifest: dict) -> list[str]:
             continue
         destino.write_text(contenido, encoding="utf-8")
         created.append(f"{d.dir}/{rel}")
-    for r in manifest["frontend"]["remotes"]:
-        created += scaffold_remote(cfg, manifest, r)
+    if con_frontend(cfg):
+        for r in manifest["frontend"]["remotes"]:
+            created += scaffold_remote(cfg, manifest, r)
     created += platform(cfg, ir, manifest, smoke_dir(cfg, d), "../../services", with_frontend=False)
     return created + [d.dir + "/forge-domain.json"]
 
@@ -712,7 +751,8 @@ def domain_scaffold(cfg: Config, ir: dict, manifest: dict) -> list[str]:
 def assemble_files(cfg: Config, ir: dict, manifest: dict) -> list[str]:
     """Ensamblado (forge assemble): plataforma completa en out/ con TODOS los dominios presentes + shell de microfrontends."""
     created = platform(cfg, ir, manifest, cfg.out, "./services", with_frontend=True)
-    created += scaffold_shell(cfg)
+    if con_frontend(cfg):
+        created += scaffold_shell(cfg)
     (cfg.out / "AGENTS.md").write_text("# Producto generado por ArchiForge\n\nServicios en `services/`, microfrontends en `frontend/`, "
                                        "decisiones y verificación por dominio en `docs/<dominio>/`. Contrato común: `docs/contrato-bus.md`.\n", encoding="utf-8")
     (cfg.out / "CLAUDE.md").write_text("@AGENTS.md\n", encoding="utf-8")

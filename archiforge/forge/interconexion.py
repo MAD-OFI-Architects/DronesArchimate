@@ -40,7 +40,7 @@ def sync_links(ir: dict) -> list[dict]:
     return out
 
 
-def api_urls(ir: dict, d: Domain, real: list[Domain], sim: int = SIM_PORT) -> dict[str, str]:
+def api_urls(ir: dict, d: Domain, real: list[Domain], sim: int = SIM_PORT, simulated: bool = True) -> dict[str, str]:
     """Variables `<PROVEEDOR>_API_URL` del servicio `d`, según quién es real en este ensamblado."""
     by_ctx = {x.context: x for x in real}
     urls: dict[str, str] = {}
@@ -48,5 +48,10 @@ def api_urls(ir: dict, d: Domain, real: list[Domain], sim: int = SIM_PORT) -> di
         if l["downstream"] != d.context:
             continue
         up = by_ctx.get(l["upstream"])
-        urls[l["env"]] = f"http://{up.slug}:{up.port}/api" if up else f"http://simulators:{sim}/api/{kebab(l['upstream'])}"
+        if up:
+            urls[l["env"]] = f"http://{up.slug}:{up.port}/api"
+        elif simulated:
+            urls[l["env"]] = f"http://simulators:{sim}/api/{kebab(l['upstream'])}"
+        else:
+            urls[l["env"]] = "${" + l["env"] + ":-}"        # sin simuladores: la URL del proveedor la pone el equipo
     return urls

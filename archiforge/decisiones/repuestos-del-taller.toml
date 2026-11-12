@@ -9,7 +9,7 @@ puerto = 5102
 [patrones]   # true = usar · false = descartado
 memento = true
 cache = true
-cifrado = true
+cifrado = { usar = true, algoritmo = "aes-256-gcm" }
 eventos = true
 outbox = true
 acl = true

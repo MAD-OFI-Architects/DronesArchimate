@@ -76,6 +76,11 @@ class Config:
     platform: dict = field(default_factory=dict)   # decisiones de la plataforma (decisiones/plataforma.toml): p. ej. el canal de eventos
     tool_root: Path = TOOL_ROOT       # raíz de la HERRAMIENTA; distinta de `root` cuando el proyecto vive aparte (TUI)
 
+    @property
+    def con_frontend(self) -> bool:
+        """El frontend se genera salvo que el arquitecto haya decidido «ninguno» (si aún no decidió, lo pedirá el ensamblado)."""
+        return self.platform.get("frontend") != "ninguno"
+
     def for_domain(self, d: Domain) -> "Config":
         """Vista de la configuración para construir UN dominio: estado propio y solo ese dominio."""
         return dataclasses.replace(self, domains=[d], state_dir=f"{self.state_dir}/{d.slug}")

@@ -16,7 +16,7 @@ outbox = true
 eventos = true
 acl = true
 cache = true
-cifrado = true
+cifrado = { usar = true, algoritmo = "aes-256-gcm" }
 
 [justificacion]   # tus razones; el ADR las cita tal cual
 lenguaje = "C# por tipado fuerte y soporte de DDD."

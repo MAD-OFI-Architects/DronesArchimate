@@ -12,14 +12,34 @@ STYLES = ("microservicio", "soa", "monolito-modular")
 DATABASES = ("mongodb", "postgresql")
 DECISION_KEYS = ("lenguaje", "arquitectura", "estilo", "base_de_datos")
 PLATAFORMA = "plataforma"
-GATEWAYS = {
-    "nginx": "un contenedor nginx sirve los microfrontends y enruta /api/<servicio>, /sim y /bus hacia los servicios",
-    "propio": "sin gateway generado: cada servicio publica su puerto y se documentan las rutas que el frontend espera, para configurar el gateway que el equipo elija",
-}
 MENSAJERIAS = {
     "rabbitmq": "los eventos viven en RabbitMQ: colas durables por suscriptor, reintentos con espera y cola de mensajes muertos",
     "memoria": "relé HTTP en memoria: sin broker ni persistencia (los mensajes en vuelo se pierden al reiniciar el bus)",
 }
+GATEWAYS = {
+    "nginx": "un contenedor nginx sirve los microfrontends y enruta /api/<servicio>, /sim y /bus hacia los servicios",
+    "propio": "sin gateway generado: cada servicio publica su puerto y se documentan las rutas que el frontend espera, para configurar el gateway que el equipo elija",
+}
+FRONTENDS = {
+    "microfrontends": "un remote (Web Component con React + Vite) por dominio y un shell que los carga por rol",
+    "ninguno": "sin frontend generado: solo las APIs de los servicios",
+}
+DESPLIEGUES = {
+    "docker-compose": "docker-compose.yml con todos los servicios, las bases de datos y el bus",
+    "propio": "sin artefactos de despliegue generados: el equipo despliega los servicios con su propia herramienta",
+}
+SIMULADORES = {
+    "generar": "se simulan los contextos que no se construyen (eventos y APIs) para que el producto corra completo",
+    "ninguno": "sin simuladores: las URL de los proveedores externos las configura el equipo",
+}
+# (clave en plataforma.toml) -> (título, opciones)
+ELECCIONES_DE_PLATAFORMA = {
+    "mensajeria": ("Canal de eventos", MENSAJERIAS), "gateway": ("Gateway", GATEWAYS), "frontend": ("Frontend", FRONTENDS),
+    "despliegue": ("Despliegue", DESPLIEGUES), "simuladores": ("Simuladores", SIMULADORES),
+}
+# Versiones de imagen que la herramienta fija por defecto; el arquitecto puede cambiarlas en `[imagenes]`.
+IMAGENES = {"mongo": "mongo:7", "postgres": "postgres:16", "rabbitmq": "rabbitmq:3.13-management-alpine",
+            "nginx": "nginx:1.27-alpine", "python": "python:3.12-slim", "node": "node:22-alpine"}
 
 
 CATALOG_ORDER = ("patrones", "creacionales", "estructurales", "comportamiento", "dominio", "integracion")
@@ -99,6 +119,9 @@ def validate(cfg: Config, d: Domain) -> tuple[list[str], list[str]]:
     for pid, p in d.patterns.items():
         if p.get("usar") and cat.get(pid, {}).get("requiere_donde") and not str(p.get("aplicar_en", "")).strip():
             errors.append(f"Indica dónde se aplica «{cat[pid]['nombre']}» (campo aplicar_en): el patrón no sabe sobre qué parte del servicio actuar.")
+        for clave, opciones in cat.get(pid, {}).get("elecciones", {}).items():
+            if p.get("usar") and p.get(clave) not in opciones:
+                errors.append(f"Elige {clave} de «{cat[pid]['nombre']}» (opciones: {', '.join(opciones)}): la herramienta no elige por ti.")
         for req in cat.get(pid, {}).get("requiere", []):
             if p.get("usar") and not d.uses(req):
                 errors.append(f"el patrón «{pid}» requiere «{req}» (actívalo o desactiva «{pid}»).")
@@ -123,28 +146,46 @@ def read_platform(cfg: Config) -> dict:
     if not f.exists():
         return {}
     raw = tomllib.loads(f.read_text(encoding="utf-8"))
-    for clave, opciones in (("mensajeria", MENSAJERIAS), ("gateway", GATEWAYS)):
+    out: dict = {}
+    for clave, (_, opciones) in ELECCIONES_DE_PLATAFORMA.items():
         v = raw.get(clave)
         if v is not None and v not in opciones:
             raise SystemExit(f"{f.name}: {clave} «{v}» no existe. Opciones: {', '.join(opciones)}.")
-    return {"mensajeria": raw.get("mensajeria"), "gateway": raw.get("gateway"), "justificacion": dict(raw.get("justificacion", {}))}
+        out[clave] = v
+    desconocidas = sorted(set(raw.get("imagenes", {})) - set(IMAGENES))
+    if desconocidas:
+        raise SystemExit(f"{f.name}: imágenes desconocidas {desconocidas}. Disponibles: {', '.join(IMAGENES)}.")
+    out["imagenes"] = dict(raw.get("imagenes", {}))
+    out["justificacion"] = dict(raw.get("justificacion", {}))
+    return out
 
 
-def write_platform(cfg: Config, mensajeria: str | None = None, gateway: str | None = None, why: dict | None = None) -> Path:
+def imagen(cfg: Config, nombre: str) -> str:
+    """Imagen de contenedor: la que el arquitecto fijó o, si no, la versión que la herramienta trae fijada."""
+    return (cfg.platform.get("imagenes") or {}).get(nombre) or IMAGENES[nombre]
+
+
+def write_platform(cfg: Config, elecciones: dict | None = None, why: dict | None = None, imagenes: dict | None = None) -> Path:
     """Registra las decisiones de la plataforma; lo que no se pasa conserva su valor anterior."""
-    for clave, valor, opciones in (("mensajeria", mensajeria, MENSAJERIAS), ("gateway", gateway, GATEWAYS)):
-        if valor is not None and valor not in opciones:
-            raise SystemExit(f"{clave} «{valor}» no existe. Opciones: {', '.join(opciones)}.")
+    for clave, valor in (elecciones or {}).items():
+        if clave not in ELECCIONES_DE_PLATAFORMA:
+            raise SystemExit(f"«{clave}» no es una decisión de la plataforma. Disponibles: {', '.join(ELECCIONES_DE_PLATAFORMA)}.")
+        if valor is not None and valor not in ELECCIONES_DE_PLATAFORMA[clave][1]:
+            raise SystemExit(f"{clave} «{valor}» no existe. Opciones: {', '.join(ELECCIONES_DE_PLATAFORMA[clave][1])}.")
+    for nombre in imagenes or {}:
+        if nombre not in IMAGENES:
+            raise SystemExit(f"Imagen «{nombre}» desconocida. Disponibles: {', '.join(IMAGENES)}.")
     actual = read_platform(cfg)
-    mensajeria = mensajeria or actual.get("mensajeria")
-    gateway = gateway or actual.get("gateway")
+    valores = {k: ((elecciones or {}).get(k) or actual.get(k)) for k in ELECCIONES_DE_PLATAFORMA}
+    imgs = {**actual.get("imagenes", {}), **{k: v.strip() for k, v in (imagenes or {}).items() if v and v.strip()}}
     razones = {**actual.get("justificacion", {}), **{k: v.strip() for k, v in (why or {}).items() if v.strip()}}
     cfg.decisions_dir.mkdir(parents=True, exist_ok=True)
     L = ["# Decisiones de la plataforma — las toma el arquitecto; la herramienta ejecuta fiel a esto."]
-    if mensajeria:
-        L.append(f"mensajeria = {_q(mensajeria)}      # {' | '.join(MENSAJERIAS)}")
-    if gateway:
-        L.append(f"gateway = {_q(gateway)}      # {' | '.join(GATEWAYS)}")
+    for clave, (_, opciones) in ELECCIONES_DE_PLATAFORMA.items():
+        if valores[clave]:
+            L.append(f"{clave} = {_q(valores[clave])}      # {' | '.join(opciones)}")
+    if imgs:
+        L += ["", "[imagenes]   # versión de cada imagen de contenedor (si falta, la herramienta usa la suya)"] + [f"{k} = {_q(v)}" for k, v in imgs.items()]
     if razones:
         L += ["", "[justificacion]"] + [f"{k} = {_q(v)}" for k, v in razones.items()]
     path = cfg.decisions_dir / f"{PLATAFORMA}.toml"

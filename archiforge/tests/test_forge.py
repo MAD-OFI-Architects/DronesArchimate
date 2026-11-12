@@ -230,9 +230,9 @@ def test_dryrun_end_to_end_with_fake_agent(tmp_path):
     shutil.copytree(ROOT, work, ignore=shutil.ignore_patterns("out*", ".forge*", "decisiones_dryrun", ".git", "__pycache__", ".claude", ".opencode", ".pytest_cache"))
     run = lambda *a: subprocess.run([sys.executable, "-m", "forge", "-c", "forge.dryrun.toml", *a], cwd=work, capture_output=True, text=True)  # noqa: E731
     r = run("decide", "Repuestos del Taller", "--lang", "python", "--arch", "hexagonal", "--style", "microservicio", "--db", "postgresql",
-            "--patterns", "cqrs,memento,cache,cifrado,eventos,outbox", "--why", "lenguaje=x")
+            "--patterns", "cqrs,memento,cache,cifrado,eventos,outbox", "--detail", "cifrado.algoritmo=aes-256-gcm", "--why", "lenguaje=x")
     assert r.returncode == 0, r.stderr
-    assert run("platform", "--messaging", "memoria").returncode == 0                  # el canal de eventos lo decide el arquitecto
+    assert run("platform", "--messaging", "memoria", "--frontend", "microfrontends").returncode == 0     # lo decide el arquitecto
     r = run("build", "Repuestos del Taller", "--laps", "1", "--skip-doctor")
     assert r.returncode == 0, r.stdout[-2000:] + r.stderr[-500:]
     assert json.loads(run("-d", "Repuestos del Taller", "next").stdout.split("\n", 2)[-1] if False else (work / ".forge-dry/repuestos-del-taller/state.json").read_text())["S60-report"]["status"] == "passed"

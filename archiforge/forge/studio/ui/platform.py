@@ -1,18 +1,23 @@
-"""Decisiones de la plataforma: el canal de eventos entre contextos. El arquitecto elige; la lista de la derecha solo informa."""
+"""Decisiones de la plataforma: lo que no sale del modelo ArchiMate. El arquitecto elige; la columna derecha solo informa."""
 from __future__ import annotations
 
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.containers import Horizontal, VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Header, Label, Select, Static, TextArea
+from textual.widgets import Button, Footer, Header, Input, Label, Select, Static, TextArea
 
 from ... import decisions
 from ..service import Studio, StudioError
 from .widgets import Banner
 
-MENSAJERIA = [("RabbitMQ (broker con colas durables)", "rabbitmq"), ("Relé HTTP en memoria (sin broker)", "memoria")]
-GATEWAY = [("nginx (sirve el frontend y enruta hacia los servicios)", "nginx"), ("Propio (sin gateway generado; se documentan las rutas)", "propio")]
+OPCIONES = {
+    "mensajeria": [("RabbitMQ (broker con colas durables)", "rabbitmq"), ("Relé HTTP en memoria (sin broker)", "memoria")],
+    "gateway": [("nginx (sirve el frontend y enruta hacia los servicios)", "nginx"), ("Propio (sin gateway generado; se documentan las rutas)", "propio")],
+    "frontend": [("Microfrontends (React + Vite, Web Components)", "microfrontends"), ("Ninguno (solo las APIs)", "ninguno")],
+    "despliegue": [("Docker Compose", "docker-compose"), ("Propio (sin artefactos de despliegue)", "propio")],
+    "simuladores": [("Generar simuladores de los contextos no construidos", "generar"), ("Ninguno (el equipo configura los proveedores)", "ninguno")],
+}
 
 
 class PlatformScreen(Screen[bool]):
@@ -24,28 +29,27 @@ class PlatformScreen(Screen[bool]):
 
     def compose(self) -> ComposeResult:
         actual = self.studio.cfg.platform
+        razones = actual.get("justificacion") or {}
         yield Header()
         with Horizontal():
             with VerticalScroll(id="form", classes="card"):
                 yield Static("Decisiones de la plataforma", classes="card-title")
-                yield Label("Canal de eventos entre contextos", classes="field-label")
-                yield Select(MENSAJERIA, value=actual.get("mensajeria") or Select.NULL, prompt="Elige…", allow_blank=True, id="mensajeria")
-                yield Label("¿Por qué este canal?", classes="field-label")
-                yield TextArea((actual.get("justificacion") or {}).get("mensajeria", ""), id="why-mensajeria",
-                               placeholder="Escribe tu argumento propio")
-                yield Label("Gateway", classes="field-label")
-                yield Select(GATEWAY, value=actual.get("gateway") or Select.NULL, prompt="Elige…", allow_blank=True, id="gateway")
-                yield Label("¿Por qué este gateway?", classes="field-label")
-                yield TextArea((actual.get("justificacion") or {}).get("gateway", ""), id="why-gateway",
-                               placeholder="Escribe tu argumento propio")
+                for clave, (titulo, _) in decisions.ELECCIONES_DE_PLATAFORMA.items():
+                    yield Label(titulo, classes="field-label")
+                    yield Select(OPCIONES[clave], value=actual.get(clave) or Select.NULL, prompt="Elige…", allow_blank=True, id=clave)
+                    yield TextArea(razones.get(clave, ""), id=f"why-{clave}", placeholder="¿Por qué? Escribe tu argumento propio")
+                yield Label("Imágenes de contenedor  (vacío = la versión que trae la herramienta)", classes="field-label")
+                fijadas = actual.get("imagenes") or {}
+                for nombre, defecto in decisions.IMAGENES.items():
+                    yield Input(fijadas.get(nombre, ""), id=f"img-{nombre}", placeholder=f"{nombre}: {defecto}")
                 yield Banner(id="banner")
                 with Horizontal(classes="buttons"):
                     yield Button("Guardar", id="save", variant="success")
                     yield Button("Cancelar", id="cancel")
             with VerticalScroll(id="why", classes="card"):
                 yield Static("Referencia", classes="card-title")
-                yield Static("[b $primary]Canal de eventos[/]\n\n" + "\n\n".join(f"[b]{k}[/b]\n{v}" for k, v in decisions.MENSAJERIAS.items()) +
-                             "\n\n[b $primary]Gateway[/]\n\n" + "\n\n".join(f"[b]{k}[/b]\n{v}" for k, v in decisions.GATEWAYS.items()), id="reference")
+                yield Static("\n\n".join(f"[b $primary]{titulo}[/]\n" + "\n".join(f"[b]{k}[/b]: {v}" for k, v in opciones.items())
+                                         for titulo, opciones in decisions.ELECCIONES_DE_PLATAFORMA.values()), id="reference")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -53,14 +57,15 @@ class PlatformScreen(Screen[bool]):
 
     @on(Button.Pressed, "#save")
     def action_save(self) -> None:
-        canal, gateway = self.query_one("#mensajeria", Select).value, self.query_one("#gateway", Select).value
-        faltan = [n for n, v in (("el canal de eventos", canal), ("el gateway", gateway)) if v is Select.NULL]
+        valores = {c: self.query_one(f"#{c}", Select).value for c in decisions.ELECCIONES_DE_PLATAFORMA}
+        faltan = [decisions.ELECCIONES_DE_PLATAFORMA[c][0].lower() for c, v in valores.items() if v is Select.NULL]
         if faltan:
-            self.query_one(Banner).show("error", f"Elige {' y '.join(faltan)}.")
+            self.query_one(Banner).show("error", f"Elige: {', '.join(faltan)}.")
             return
+        why = {c: self.query_one(f"#why-{c}", TextArea).text for c in valores}
+        imagenes = {n: self.query_one(f"#img-{n}", Input).value for n in decisions.IMAGENES}
         try:
-            self.studio.save_platform(str(canal), str(gateway), {"mensajeria": self.query_one("#why-mensajeria", TextArea).text,
-                                                                  "gateway": self.query_one("#why-gateway", TextArea).text})
+            self.studio.save_platform({c: str(v) for c, v in valores.items()}, why, imagenes)
         except StudioError as e:
             self.query_one(Banner).show("error", str(e))
             return

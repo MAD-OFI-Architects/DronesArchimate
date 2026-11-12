@@ -55,12 +55,15 @@ class DecisionScreen(Screen[bool]):
                 yield Input(str(d.port), id="port", type="integer")
                 yield Label("Patrones  (espacio marca/desmarca)", classes="field-label")
                 yield SelectionList(*[Selection(self._label(a), a["id"], bool(d.patterns.get(a["id"], {}).get("usar"))) for a in self.ref], id="patterns")
-                yield Label("Dónde se aplica cada patrón elegido", classes="field-label", id="where-title")
+                yield Label("Detalles de cada patrón elegido", classes="field-label", id="where-title")
                 with Vertical(id="where"):
                     for a in self.ref:
                         if a.get("requiere_donde"):
                             yield Input(value=str(d.patterns.get(a["id"], {}).get("aplicar_en", "")), id=f"where-{a['id']}",
                                         placeholder="p. ej. el repositorio de lectura de órdenes")
+                        for clave, opciones in (a.get("elecciones") or {}).items():
+                            yield Select([(o, o) for o in opciones], value=d.patterns.get(a["id"], {}).get(clave) or Select.NULL,
+                                         prompt="Elige…", allow_blank=True, id=f"choice-{a['id']}-{clave}")
                 for key, q in WHY:
                     yield Label(q, classes="field-label")
                     cur = d.rationale.get(key, "")
@@ -80,6 +83,8 @@ class DecisionScreen(Screen[bool]):
         for a in self.ref:
             if a.get("requiere_donde"):
                 self.query_one(f"#where-{a['id']}", Input).border_title = a["nombre"]
+            for clave in (a.get("elecciones") or {}):
+                self.query_one(f"#choice-{a['id']}-{clave}", Select).border_title = f"{a['nombre']}: {clave}"
         self._sync_where()
 
     @on(SelectionList.SelectedChanged, "#patterns")
@@ -91,6 +96,10 @@ class DecisionScreen(Screen[bool]):
             if a.get("requiere_donde"):
                 on_ = a["id"] in chosen
                 self.query_one(f"#where-{a['id']}", Input).display = on_
+                shown = shown or on_
+            for clave in (a.get("elecciones") or {}):
+                on_ = a["id"] in chosen
+                self.query_one(f"#choice-{a['id']}-{clave}", Select).display = on_
                 shown = shown or on_
         self.query_one("#where-title").display = shown
 
@@ -138,6 +147,11 @@ class DecisionScreen(Screen[bool]):
                 where = self.query_one(f"#where-{a['id']}", Input).value.strip()
                 if where:
                     entry["aplicar_en"] = where
+            for clave in (a.get("elecciones") or {}):
+                entry.pop(clave, None)
+                valor = self.query_one(f"#choice-{a['id']}-{clave}", Select).value
+                if entry["usar"] and valor is not Select.NULL:
+                    entry[clave] = str(valor)
             patterns[a["id"]] = entry
         why = {k: self.query_one(f"#why-{k}", TextArea).text.strip() for k, _ in WHY}
         keep = {k: v for k, v in self.draft.rationale.items() if k not in why}     # justificaciones de patrones, etc.

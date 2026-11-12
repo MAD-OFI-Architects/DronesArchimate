@@ -15,15 +15,19 @@ from .util import kebab, pascal
 VERB_QUERY = {"consultar": "Obtener", "obtener": "Obtener", "listar": "Listar"}
 
 
+# Clase de infraestructura según el algoritmo de cifrado que el arquitecto eligió.
+CIFRADORES = {"aes-256-gcm": "CifradorAes", "chacha20-poly1305": "CifradorChaCha20"}
+
+
 def _item(domain: Domain, kind: str, layer: str, name: str, trace: str = "", required: bool = True, **extra) -> dict:
     return {"id": f"{domain.slug}:{layer}:{kind}:{name}", "domain": domain.context, "language": domain.language,
             "kind": kind, "layer": layer, "name": name, "trace": trace, "required": required, **extra}
 
 
-def service_env(d: Domain, bus: int = 5100, sim: int = 5110, api_urls: dict[str, str] | None = None) -> dict:
+def service_env(d: Domain, bus: int = 5100, sim: int = 5110, api_urls: dict[str, str] | None = None, simulators: bool = True) -> dict:
     """Contrato de variables de entorno de un servicio (lo fija el orquestador; el servicio las LEE, no las inventa)."""
     db = d.slug.replace("-", "_")
-    env = {"PORT": str(d.port), "BUS_URL": f"http://event-bus:{bus}", "SIMULATORS_URL": f"http://simulators:{sim}",
+    env = {"PORT": str(d.port), "BUS_URL": f"http://event-bus:{bus}", "SIMULATORS_URL": f"http://simulators:{sim}" if simulators else "",
            "CIFRADO_CLAVE": "ZGV2LWtleS0zMi1ieXRlcy1sb25nLWZvci1hZXMtMjU2ISE="}   # clave de desarrollo en base64 (32 bytes)
     env.update(api_urls or {})        # <PROVEEDOR>_API_URL: real o simulado según el ensamblado (SIMULATORS_URL se conserva por compatibilidad)
     if d.database == "mongodb":
@@ -60,7 +64,7 @@ def acl_name(mechanism: str) -> str:
     return pascal(acl_text(mechanism))
 
 
-def build_manifest(ir: dict, domains: list[Domain]) -> dict:
+def build_manifest(ir: dict, domains: list[Domain], con_frontend: bool = True) -> dict:
     real = {d.context for d in domains}
     ctx = {c["name"]: c for c in ir["contexts"]}
     aggs = {a["name"]: a for a in ir["aggregates"]}
@@ -160,7 +164,7 @@ def build_manifest(ir: dict, domains: list[Domain]) -> dict:
         # ---------------- transversales (cada uno solo si el arquitecto lo eligió) ----------------
         if d.uses("cifrado"):
             items.append(_item(d, "crypto_port", "application", "Cifrador"))
-            items.append(_item(d, "crypto_impl", "infrastructure", "CifradorAes"))
+            items.append(_item(d, "crypto_impl", "infrastructure", CIFRADORES.get(d.patterns["cifrado"].get("algoritmo"), "Cifrador")))
         if d.uses("eventos"):
             items.append(_item(d, "event_publisher", "infrastructure", "PublicadorDeEventosHttp"))
         items.append(_item(d, "endpoints", "api", f"{P}Endpoints", d.context))
@@ -207,7 +211,7 @@ def build_manifest(ir: dict, domains: list[Domain]) -> dict:
 
     # ---------------- microfrontends: UN remote por dominio (cada equipo es dueño del suyo); los roles se filtran dentro ----------------
     frontend = {"shell": "mfe-shell", "remotes": []}
-    for d in domains:
+    for d in (domains if con_frontend else []):
         slug = f"mfe-{d.slug}"
         cmds_, roles = [], {}
         for x in ir["commands"]:

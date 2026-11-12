@@ -107,18 +107,25 @@ def _context(cfg: config.Config, name: str) -> str:
     return hits[0]
 
 
-def cmd_platform(cfg: config.Config, a) -> int:
-    why = {}
-    for item in a.why or []:
+def _pares(items) -> dict:
+    out = {}
+    for item in items or []:
         k, _, v = item.partition("=")
-        why[k.strip()] = v.strip()
-    if a.messaging or a.gateway or why:
-        print(f"✔ {decisions.write_platform(cfg, a.messaging, a.gateway, why)}")
-    for clave, titulo, opciones in (("mensajeria", "Canal de eventos", decisions.MENSAJERIAS), ("gateway", "Gateway", decisions.GATEWAYS)):
+        out[k.strip()] = v.strip()
+    return out
+
+
+def cmd_platform(cfg: config.Config, a) -> int:
+    elecciones = {k: getattr(a, k) for k in decisions.ELECCIONES_DE_PLATAFORMA if getattr(a, k, None)}
+    why, imagenes = _pares(a.why), _pares(a.image)
+    if elecciones or why or imagenes:
+        print(f"✔ {decisions.write_platform(cfg, elecciones, why, imagenes)}")
+    for clave, (titulo, opciones) in decisions.ELECCIONES_DE_PLATAFORMA.items():
         cur = cfg.platform.get(clave)
         print(f"{titulo}: {cur or 'sin decidir'}" + (f" — {opciones[cur]}" if cur else ""))
         if not cur:
             print("  Opciones:\n" + "\n".join(f"    · {k}: {v}" for k, v in opciones.items()))
+    print("Imágenes: " + ", ".join(f"{n}={decisions.imagen(cfg, n)}" + ("" if n in (cfg.platform.get("imagenes") or {}) else " (de la herramienta)") for n in decisions.IMAGENES))
     return 0
 
 
@@ -140,6 +147,12 @@ def cmd_decide(cfg: config.Config, a) -> int:
     for item in a.why or []:
         k, _, v = item.partition("=")
         d.rationale[k.strip()] = v.strip()
+    for item in a.detail or []:
+        k, _, v = item.partition("=")
+        pid, _, clave = k.strip().partition(".")
+        if pid not in d.patterns or not clave:
+            raise SystemExit(f"--detail {item}: usa PATRON.CLAVE=VALOR con un patrón elegido en este dominio (--patterns).")
+        d.patterns[pid][clave] = v.strip()
     missing = [n for n, v in (("--lang", d.language), ("--arch", d.architecture), ("--style", d.style), ("--db", d.database)) if not v]
     if missing:
         raise SystemExit(f"Faltan decisiones: {', '.join(missing)}. La herramienta no elige por ti .")
@@ -178,8 +191,9 @@ def cmd_domains(cfg: config.Config) -> int:
             print(f"{c['name']:28} {'sí':9} {d.language:8} {d.architecture:12} {d.style:16} {d.database:11} {_domain_status(cfg, d)}")
         else:
             print(f"{c['name']:28} {'—':9} (se simula; decide con `forge decide` para construirlo)")
-    print(f"\nPlataforma · canal de eventos: {cfg.platform.get('mensajeria') or 'sin decidir'} · gateway: {cfg.platform.get('gateway') or 'sin decidir'}"
-          + ("" if cfg.platform.get("mensajeria") and cfg.platform.get("gateway") else "  (decídelos con `forge platform`)"))
+    pend = [t for k, (t, _) in decisions.ELECCIONES_DE_PLATAFORMA.items() if not cfg.platform.get(k)]
+    print("\nPlataforma: " + " · ".join(f"{t.lower()}: {cfg.platform.get(k) or 'sin decidir'}" for k, (t, _) in decisions.ELECCIONES_DE_PLATAFORMA.items())
+          + (f"\n  Falta decidir: {', '.join(pend)} (`forge platform`)." if pend else ""))
     return 0
 
 
@@ -265,6 +279,8 @@ def cmd_patterns(cfg: config.Config, pid: str | None, categoria: str | None = No
             print(f"Requiere:   {', '.join(p['requiere'])}")
         if p.get("requiere_donde"):
             print("Al elegirlo indicas dónde se aplica (campo aplicar_en).")
+        for clave, opciones in (p.get("elecciones") or {}).items():
+            print(f"Al elegirlo eliges {clave}: {' | '.join(opciones)}  (--detail {pid}.{clave}=<opción>)")
         if p.get("fuente"):
             print(f"Referencia: {p['fuente']}")
         return 0
@@ -286,12 +302,14 @@ def cmd_assemble(cfg: config.Config, a) -> int:
         raise SystemExit("No hay dominios construidos en out/. Primero: python -m forge build \"<Dominio>\"")
     cfg2 = dataclasses.replace(cfg, domains=built, state_dir=f"{cfg.state_dir}/_assemble")
     ir = build_ir(cfg.archimate, cfg.docs_dir)
-    manifest = build_manifest(ir, built)
+    manifest = build_manifest(ir, built, cfg.con_frontend)
     created = scaffold.assemble_files(cfg2, ir, manifest)
     print(f"Ensamblado de {len(built)} dominio(s): {', '.join(d.context for d in built)} ({len(created)} archivos de plataforma)")
-    results = [G.shell_design_gate(cfg2)] + [g for p in sorted((out / "frontend").glob("mfe-*/mfe.json")) for g in (G.design_gate(cfg2, f"frontend/{p.parent.name}"), G.hints_gate(cfg2, f"frontend/{p.parent.name}"))]
-    results += [G.npm_build(cfg2, "frontend/mfe-shell")] + [G.npm_build(cfg2, f"frontend/{p.parent.name}") for p in sorted((out / "frontend").glob("mfe-*/mfe.json"))]
-    if "smoke" not in cfg.raw.get("quality", {}).get("skip", []):
+    results = []
+    if cfg.con_frontend:
+        results = [G.shell_design_gate(cfg2)] + [g for p in sorted((out / "frontend").glob("mfe-*/mfe.json")) for g in (G.design_gate(cfg2, f"frontend/{p.parent.name}"), G.hints_gate(cfg2, f"frontend/{p.parent.name}"))]
+        results += [G.npm_build(cfg2, "frontend/mfe-shell")] + [G.npm_build(cfg2, f"frontend/{p.parent.name}") for p in sorted((out / "frontend").glob("mfe-*/mfe.json"))]
+    if "smoke" not in cfg.raw.get("quality", {}).get("skip", []) and cfg.platform.get("despliegue") == "docker-compose":
         results.append(G.smoke_assembled_gate(cfg2, built))
     results += G.interconnect_gates(cfg2, ir, built)
     results += G.policy_gates(cfg2, built, [c["name"] for c in ir["contexts"]])
@@ -335,16 +353,19 @@ def main(argv: list[str] | None = None) -> int:
     pt = sub.add_parser("patterns", help="catálogo de patrones disponibles; con un id muestra su ficha")
     pt.add_argument("id", nargs="?")
     pt.add_argument("--categoria", help="filtra por categoría (creacional, estructural, comportamiento, dominio, aplicación, integración, persistencia, resiliencia, infraestructura)")
-    pl = sub.add_parser("platform", help="registra las decisiones de la plataforma (decisiones/plataforma.toml): el canal de eventos")
-    pl.add_argument("--messaging", choices=list(decisions.MENSAJERIAS), help="; ".join(f"{k}: {v}" for k, v in decisions.MENSAJERIAS.items()))
-    pl.add_argument("--gateway", choices=list(decisions.GATEWAYS), help="; ".join(f"{k}: {v}" for k, v in decisions.GATEWAYS.items()))
-    pl.add_argument("--why", action="append", metavar="CLAVE=TEXTO", help="justificación (mensajeria o gateway)")
+    pl = sub.add_parser("platform", help="registra las decisiones de la plataforma (decisiones/plataforma.toml): canal de eventos, gateway, frontend, despliegue, simuladores e imágenes")
+    for clave, flag in (("mensajeria", "messaging"), ("gateway", "gateway"), ("frontend", "frontend"), ("despliegue", "deployment"), ("simuladores", "simulators")):
+        titulo, opciones = decisions.ELECCIONES_DE_PLATAFORMA[clave]
+        pl.add_argument(f"--{flag}", dest=clave, choices=list(opciones), help=f"{titulo}: " + "; ".join(f"{k}: {v}" for k, v in opciones.items()))
+    pl.add_argument("--image", action="append", metavar="NOMBRE=IMAGEN", help=f"versión de una imagen de contenedor ({', '.join(decisions.IMAGENES)})")
+    pl.add_argument("--why", action="append", metavar="CLAVE=TEXTO", help="justificación (mensajeria, gateway, frontend, despliegue o simuladores)")
     de = sub.add_parser("decide", help="registra las decisiones del arquitecto para un dominio (decisiones/<dominio>.toml)")
     de.add_argument("name")
     de.add_argument("--lang", choices=list(config.LANGUAGES)); de.add_argument("--arch", choices=list(decisions.ARCHITECTURES))
     de.add_argument("--style", choices=list(decisions.STYLES)); de.add_argument("--db", choices=list(decisions.DATABASES)); de.add_argument("--port", type=int)
     de.add_argument("--patterns", help="lista separada por comas; «!x» descarta x. Ej.: cqrs,memento,cache,!state")
     de.add_argument("--why", action="append", metavar="CLAVE=TEXTO", help="justificación (lenguaje, base_de_datos, arquitectura, estilo o un patrón)")
+    de.add_argument("--detail", action="append", metavar="PATRON.CLAVE=VALOR", help="elección de un patrón (p. ej. cifrado.algoritmo=aes-256-gcm); ver `forge patterns <id>`")
     ck = sub.add_parser("check", help="valida las decisiones de un dominio")
     ck.add_argument("name")
     b = sub.add_parser("build", help="construye uno o varios dominios hasta terminar y verificar (reintenta y reanuda solo)")

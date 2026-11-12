@@ -26,7 +26,7 @@ def _sha(valor: object) -> str:
 
 
 def huellas(cfg: Config, d: Domain) -> dict:
-    manifiesto = build_manifest(build_ir(cfg.archimate, cfg.docs_dir), [d])
+    manifiesto = build_manifest(build_ir(cfg.archimate, cfg.docs_dir), [d], cfg.con_frontend)
     decision = {k: v for k, v in dataclasses.asdict(d).items() if k != "rationale"}
     return {
         "modelo": _sha({"manifiesto": manifiesto, "decision": decision}),

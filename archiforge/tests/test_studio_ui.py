@@ -300,7 +300,7 @@ def test_draft_justifications_show_as_grey_suggestions_and_empty_fields_drop_the
     (info.root / "decisiones").mkdir(exist_ok=True)
     (info.root / "decisiones/intervenciones.toml").write_text(
         'contexto = "Intervenciones"\nlenguaje = "csharp"\narquitectura = "clean-ddd"\nestilo = "microservicio"\nbase_de_datos = "mongodb"\npuerto = 5101\n'
-        '[patrones]\ncache = true\nmemento = true\ncifrado = true\n[justificacion]\nlenguaje = "Ejemplo: C# por tipado fuerte y soporte de DDD."\n'
+        '[patrones]\ncache = true\nmemento = true\ncifrado = { usar = true, algoritmo = "aes-256-gcm" }\n[justificacion]\nlenguaje = "Ejemplo: C# por tipado fuerte y soporte de DDD."\n'
         'estilo = "Elegimos microservicio porque publica y consume eventos del ciclo de la OT."\n', encoding="utf-8")
 
     async def go():
@@ -365,7 +365,7 @@ def test_a_chosen_pattern_asks_where_it_applies_and_saves_it(env):
     run(go())
 
 
-def test_platform_screen_asks_for_the_event_channel_without_preselecting_it(env):
+def test_platform_screen_asks_for_every_platform_decision_without_preselecting_any(env):
     store, creds, info = env
 
     async def go():
@@ -377,17 +377,17 @@ def test_platform_screen_asks_for_the_event_channel_without_preselecting_it(env)
             await wait_for(pilot, lambda: "sin decidir" in str(app.screen.query_one("#platform-text").render()))
             await pilot.press("p")
             await wait_for(pilot, lambda: type(app.screen).__name__ == "PlatformScreen")
-            assert app.screen.query_one("#mensajeria", Select).value is Select.NULL            # nada viene elegido
-            await pilot.click("#save")
-            await wait_for(pilot, lambda: "Elige el canal" in banner_text(app.screen))           # no se guarda sin elegir
-            app.screen.query_one("#mensajeria", Select).value = "rabbitmq"
-            assert app.screen.query_one("#gateway", Select).value is Select.NULL                # tampoco el gateway viene elegido
-            await pilot.click("#save")
-            await wait_for(pilot, lambda: "Elige el gateway" in banner_text(app.screen))
-            app.screen.query_one("#gateway", Select).value = "propio"
-            await pilot.click("#save")
+            claves = ("mensajeria", "gateway", "frontend", "despliegue", "simuladores")
+            assert all(app.screen.query_one(f"#{c}", Select).value is Select.NULL for c in claves)      # nada viene elegido
+            await pilot.press("ctrl+s")
+            await wait_for(pilot, lambda: "Elige:" in banner_text(app.screen))                         # no se guarda sin elegir todo
+            for c, v in zip(claves, ("rabbitmq", "propio", "ninguno", "propio", "ninguno")):
+                app.screen.query_one(f"#{c}", Select).value = v
+            app.screen.query_one("#img-mongo", Input).value = "mongo:8"
+            await pilot.press("ctrl+s")
             await wait_for(pilot, lambda: type(app.screen).__name__ == "DomainsScreen")
-            await wait_for(pilot, lambda: "rabbitmq" in str(app.screen.query_one("#platform-text").render()))
-        guardado = (Path(info.root) / "decisiones/plataforma.toml").read_text(encoding="utf-8")
-        assert 'mensajeria = "rabbitmq"' in guardado and 'gateway = "propio"' in guardado
+            await wait_for(pilot, lambda: "sin decidir" not in str(app.screen.query_one("#platform-text").render()))
+        g = (Path(info.root) / "decisiones/plataforma.toml").read_text(encoding="utf-8")
+        for linea in ('mensajeria = "rabbitmq"', 'gateway = "propio"', 'frontend = "ninguno"', 'despliegue = "propio"', 'simuladores = "ninguno"', 'mongo = "mongo:8"'):
+            assert linea in g
     run(go())

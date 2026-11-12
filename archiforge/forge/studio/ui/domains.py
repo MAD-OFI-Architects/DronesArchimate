@@ -8,6 +8,7 @@ from textual.containers import Vertical, VerticalScroll, Horizontal
 from textual.screen import Screen
 from textual.widgets import DataTable, Footer, Header, Static
 
+from ... import decisions
 from ..projects import ProjectInfo
 from ..service import DomainRow, Studio
 from .widgets import Banner
@@ -95,10 +96,9 @@ class DomainsScreen(Screen):
             ok = line.startswith("✓")
             txt.append(line + "\n", style="#9ece6a" if ok else "#f7768e")
         self.query_one("#rules", Static).update(txt)
-        canal, gateway = cfg.platform.get("mensajeria"), cfg.platform.get("gateway")
-        self.query_one("#platform-text", Static).update(
-            f"Canal de eventos: [b]{canal or '[b $warning]sin decidir[/]'}[/]\nGateway: [b]{gateway or '[b $warning]sin decidir[/]'}[/]"
-            + ("" if canal and gateway else "\n[dim]pulsa [b]p[/b] para decidirlos[/]"))
+        lineas = [f"{t}: [b]{cfg.platform.get(k) or '[b $warning]sin decidir[/]'}[/]" for k, (t, _) in decisions.ELECCIONES_DE_PLATAFORMA.items()]
+        faltan = any(not cfg.platform.get(k) for k in decisions.ELECCIONES_DE_PLATAFORMA)
+        self.query_one("#platform-text", Static).update("\n".join(lineas) + ("\n[dim]pulsa [b]p[/b] para decidirlas[/]" if faltan else ""))
         self.query_one("#portfolio").display = bool(rules)         # sin políticas declaradas, el panel no existe
         self.query_one(Banner).clear()
         if not any(r.decided for r in rows):

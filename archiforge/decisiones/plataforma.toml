@@ -1,6 +1,13 @@
+# Decisiones de la plataforma — las toma el arquitecto; la herramienta ejecuta fiel a esto.
 mensajeria = "rabbitmq"      # rabbitmq | memoria
 gateway = "nginx"      # nginx | propio
+frontend = "microfrontends"      # microfrontends | ninguno
+despliegue = "docker-compose"      # docker-compose | propio
+simuladores = "generar"      # generar | ninguno
 
 [justificacion]
 mensajeria = "Los eventos entre contextos deben sobrevivir a reinicios y a la caída de un suscriptor."
 gateway = "Un único punto de entrada sirve los microfrontends y enruta hacia los servicios."
+frontend = "Un remote por dominio permite que cada equipo publique su parte sin tocar la del otro."
+despliegue = "Un único compose levanta todo el producto para demostración y desarrollo."
+simuladores = "Los contextos que no se construyen deben responder para que el producto corra completo."

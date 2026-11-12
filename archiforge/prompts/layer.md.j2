@@ -46,7 +46,7 @@ Sigue los roles y sufijos de la guía de referencia (`reference/guia_ddd.md`): `
 - **Persistencia**: `Repositorio…` por agregado sobre {{ d.database }}{% if d.uses('memento') %} (el agregado se guarda como snapshot vía su Memento){% endif %}{% if d.database == 'postgresql' %}; tablas relacionales con restricciones, una sola transacción que guarda el agregado{% if d.uses('outbox') %} **y** la bandeja de salida{% endif %}{% else %}; el agregado se guarda como documento{% if d.uses('outbox') %}, con transacción de Mongo para agregado + bandeja de salida{% endif %}{% endif %}.
 {% if d.uses('cache') %}- **Caché (elegida)**: `RepositorioCacheado…` (decorador del repositorio, caché en memoria con TTL 60 s, invalida al guardar).
 {% endif %}
-{% if d.uses('cifrado') %}- **Cifrado (elegido)**: `CifradorAes` (AES‑GCM, clave `CIFRADO_CLAVE` en base64) cifra los **datos personales** en reposo (ver `contracts[*].rnf` del IR).
+{% if d.uses('cifrado') %}{% set cif = {'aes-256-gcm': ['CifradorAes', 'AES‑256‑GCM'], 'chacha20-poly1305': ['CifradorChaCha20', 'ChaCha20‑Poly1305']}[d.patterns.cifrado.algoritmo] %}- **Cifrado (elegido)**: `{{ cif[0] }}` ({{ cif[1] }}, clave `CIFRADO_CLAVE` en base64) cifra los **datos personales** en reposo (ver `contracts[*].rnf` del IR).
 {% endif %}
 {% if d.uses('eventos') %}- **Eventos**: `PublicadorDeEventosHttp` (`POST {BUS_URL}/publish`){% if d.uses('outbox') %}, `BandejaDeSalida` (despachador con reintentos) y `ProcesadorDeMensajeEntrante` (idempotente por `eventId`){% endif %}; el endpoint `POST /events/{topic}` recibe del bus y entrega al consumidor correspondiente.
 {% endif %}

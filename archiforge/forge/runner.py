@@ -129,7 +129,7 @@ class Runner:
             missing = [d.context for d in cfg.domains if d.context not in names]
             if missing:
                 return [G.Gate(False, "dominios configurados", f"No existen en el modelo: {missing}")]
-            m = build_manifest(self.ir, cfg.domains)
+            m = build_manifest(self.ir, cfg.domains, cfg.con_frontend)
             (self.fdir / "manifest.json").write_text(json.dumps(m, indent=2, ensure_ascii=False), encoding="utf-8")
             self._manifest = m
             self.log("  manifiesto: " + json.dumps(summary(m), ensure_ascii=False))

@@ -73,7 +73,7 @@ def build_stages(cfg: Config) -> list[Stage]:
               lambda c, m: [G.conformance_gate(c, m, {"frontend"}, None, 1.0, "conformidad: formularios"),
                             G.stubs_gate(c, f"frontend/mfe-{sl}"), G.design_gate(c, f"frontend/mfe-{sl}"), G.hints_gate(c, f"frontend/mfe-{sl}"), G.npm_build(c, f"frontend/mfe-{sl}")],
               "Un `…Form` por comando de usuario sin marcas `FORGE-STUB`, usando el sistema de diseño (tokens `--mfe-*`, clases `card`/`field`), con descripción y ayuda en cada formulario y campo, y `npm run build` del remote en verde.",
-              skip_if=lambda c, m: _skip_cfg("frontend")(c, m) or ("" if m["frontend"]["remotes"] else "el dominio no tiene comandos de usuario")),
+              skip_if=lambda c, m: _skip_cfg("frontend")(c, m) or ("omitida: el arquitecto decidió no generar frontend" if not c.con_frontend else "") or ("" if m["frontend"]["remotes"] else "el dominio no tiene comandos de usuario")),
         Stage("S50-verify", "Revisión independiente (decisiones, SOLID, DDD, patrones)", "agent", ["S40-microfrontend"], "verify.md.j2", {},
               [svc, f"out/frontend/mfe-{sl}/", docs],
               lambda c, m: [G.report_gate(c, f"docs/{sl}/verificacion.md", ["veredicto"]), G.adr_gate(c, m, final=True)],

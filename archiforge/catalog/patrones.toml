@@ -87,8 +87,9 @@ manifiesto = "RepositorioCacheado<Raiz> por agregado."
 [cifrado]
 nombre = "Cifrado simple de datos personales"
 categoria = "infraestructura"
-que_es = "Un puerto Cifrador con implementación AES-GCM cifra en reposo los datos personales."
+que_es = "Un puerto Cifrador, con la implementación del algoritmo que el arquitecto elija, cifra en reposo los datos personales."
+elecciones = { algoritmo = ["aes-256-gcm", "chacha20-poly1305"] }
 cuando_si = "El contrato exige proteger datos personales (p. ej. Ley 1581 de 2012)."
 cuando_no = "El servicio no guarda datos sensibles."
 costo = "Bajo; la clave viaja por variable de entorno."
-manifiesto = "Cifrador (puerto) y CifradorAes (AES-GCM)."
+manifiesto = "Cifrador (puerto) y su implementación según el algoritmo elegido (CifradorAes o CifradorChaCha20)."
