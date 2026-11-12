@@ -137,7 +137,7 @@ Todas se **corrigieron con pruebas** o se documentaron como límites. *(Doc 08, 
 
 ### 29. ¿Es seguro? ¿Escala?
 **Seguridad:** hoy no hay autenticación en el borde ni entre servicios (ya existe el contexto "Identidad y permisos" en el modelo, sin construir); el control por rol es solo de interfaz.
-**Escala:** los servicios no guardan estado local (el estilo microservicio lo exige), así que se pueden replicar; pero Compose es de un solo servidor y la caché es por instancia. Para producción habría que sumar un orquestador y autenticación. *(Doc 08, §4.)*
+**Escala:** los servicios no guardan estado local (el estilo microservicio lo exige) y **Intervenciones** se protege de la concurrencia entre peticiones (409); pero **Repuestos hoy debe correr como una sola instancia**: se probó con dos réplicas y pierde actualizaciones al reservar (falta control de versión). Además Compose es de un solo servidor y la caché es por instancia. Para producción habría que sumar un orquestador y autenticación. *(Doc 08, §4.)*
 
 ### 30. ¿Cuánto cuesta construir un servicio?
 Las etapas deterministas son gratis; las etapas con agente **consumen cuota** del proveedor de IA (varias sesiones por servicio, con reintentos). Por eso el programa **guarda el avance** y **no repite** lo que ya pasó las compuertas.

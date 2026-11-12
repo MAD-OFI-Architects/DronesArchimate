@@ -93,7 +93,7 @@ Para cada uno se indica qué haría falta. Es mejor que lo digas tú antes de qu
 | **Cifrado determinista (C#)** | Dos textos iguales dan el mismo cifrado | Aceptable para este uso (el documento no cambia si el dato no cambia); documentarlo |
 | **Caché por instancia** | Con varias réplicas, cada una tendría la suya | Caché compartida o invalidación por evento |
 | **Dos servicios reales de nueve** | Los demás contextos se simulan | Construirlos con el mismo procedimiento (es el propósito de la herramienta) |
-| **Concurrencia fina en Repuestos** | La reserva no bloquea la fila: dos reservas simultáneas sobre la misma referencia podrían superar el stock (no está probado) | Bloqueo de fila o actualización condicional, y una prueba con peticiones simultáneas |
+| **Repuestos no admite varias réplicas** | **Comprobado:** con una instancia, 30 reservas simultáneas sobre 5 unidades dieron exactamente 5; con **dos réplicas**, entre 7 y 10 peticiones recibieron «reservado» y solo 5 quedaron guardadas (**actualizaciones perdidas**: el guardado reemplaza la fila sin control de versión) | Control de versión (concurrencia optimista) o bloqueo de fila en el guardado, y repetir la prueba con réplicas |
 | **Tabla fija de servicios N3 → contexto** | El generador conoce los nombres de este modelo | Hacerla configurable para aceptar cualquier ArchiMate |
 | **Opciones de plataforma "propio", "sin frontend", "sin simuladores", "sin compose"** | Están probadas solo con pruebas herméticas, no levantadas en vivo | Una corrida de humo por cada combinación |
 | **Kubernetes y Angular** | No son opciones | Escribir su generador y verificarlo |
