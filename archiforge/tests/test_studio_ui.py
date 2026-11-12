@@ -381,8 +381,13 @@ def test_platform_screen_asks_for_the_event_channel_without_preselecting_it(env)
             await pilot.click("#save")
             await wait_for(pilot, lambda: "Elige el canal" in banner_text(app.screen))           # no se guarda sin elegir
             app.screen.query_one("#mensajeria", Select).value = "rabbitmq"
+            assert app.screen.query_one("#gateway", Select).value is Select.NULL                # tampoco el gateway viene elegido
+            await pilot.click("#save")
+            await wait_for(pilot, lambda: "Elige el gateway" in banner_text(app.screen))
+            app.screen.query_one("#gateway", Select).value = "propio"
             await pilot.click("#save")
             await wait_for(pilot, lambda: type(app.screen).__name__ == "DomainsScreen")
             await wait_for(pilot, lambda: "rabbitmq" in str(app.screen.query_one("#platform-text").render()))
-        assert 'mensajeria = "rabbitmq"' in (Path(info.root) / "decisiones/plataforma.toml").read_text(encoding="utf-8")
+        guardado = (Path(info.root) / "decisiones/plataforma.toml").read_text(encoding="utf-8")
+        assert 'mensajeria = "rabbitmq"' in guardado and 'gateway = "propio"' in guardado
     run(go())

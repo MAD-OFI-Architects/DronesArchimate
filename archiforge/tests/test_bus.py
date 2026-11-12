@@ -54,8 +54,8 @@ def test_sin_broker_el_bus_trabaja_en_memoria_y_lo_dice(tmp_path, monkeypatch):
     assert bus.RABBIT == "" and bus.PUBLICADOR is None
 
 
-def _plataforma(tmp_path, mensajeria):
-    cfg = dataclasses.replace(config.load(ROOT / "forge.toml"), platform={"mensajeria": mensajeria} if mensajeria else {})
+def _plataforma(tmp_path, mensajeria, gateway="nginx"):
+    cfg = dataclasses.replace(config.load(ROOT / "forge.toml"), platform={"mensajeria": mensajeria, "gateway": gateway} if mensajeria or gateway else {})
     ir = build_ir(cfg.archimate, cfg.docs_dir)
     manifest = build_manifest(ir, cfg.domains)
     return cfg, ir, manifest, scaffold.bus_topics(ir, cfg, manifest)
@@ -92,6 +92,35 @@ def test_sin_decision_la_herramienta_no_elige_el_canal_de_eventos(tmp_path):
 def test_la_decision_de_plataforma_se_escribe_y_se_lee(tmp_path):
     cfg = dataclasses.replace(config.load(ROOT / "forge.toml"), decisions_dir=tmp_path)
     from forge import decisions
-    decisions.write_platform(cfg, "rabbitmq", "durabilidad")
-    assert decisions.read_platform(cfg) == {"mensajeria": "rabbitmq", "justificacion": {"mensajeria": "durabilidad"}}
+    decisions.write_platform(cfg, "rabbitmq", "propio", {"mensajeria": "durabilidad"})
+    assert decisions.read_platform(cfg) == {"mensajeria": "rabbitmq", "gateway": "propio", "justificacion": {"mensajeria": "durabilidad"}}
+    decisions.write_platform(cfg, gateway="nginx")                               # lo que no se pasa conserva su valor
+    assert decisions.read_platform(cfg)["mensajeria"] == "rabbitmq" and decisions.read_platform(cfg)["gateway"] == "nginx"
     assert decisions.load_all(cfg) == []                                          # plataforma.toml no es un dominio
+
+
+def test_con_gateway_propio_no_hay_nginx_y_cada_servicio_publica_su_puerto(tmp_path):
+    cfg, ir, manifest, bt = _plataforma(tmp_path, "rabbitmq", "propio")
+    compose, _ = scaffold._compose(cfg, bt, "./services", True, ir)
+    assert "  gateway:" not in compose and "nginx" not in compose
+    for d in cfg.domains:
+        assert f'      - "{d.port}:{d.port}"' in compose
+    destino = tmp_path / "plat"
+    archivos = scaffold.platform(cfg, ir, manifest, destino, "./services", True)
+    assert "nginx.conf" not in archivos and "docs/gateway-rutas.md" in archivos
+    rutas = (destino / "docs/gateway-rutas.md").read_text(encoding="utf-8")
+    assert "/api/intervenciones/…" in rutas and "/mfe/<etiqueta>/<etiqueta>.js" in rutas
+
+
+def test_con_nginx_se_genera_el_gateway_y_sin_decision_no_se_elige(tmp_path):
+    cfg, ir, manifest, bt = _plataforma(tmp_path, "rabbitmq", "nginx")
+    assert "  gateway:\n    build: ./frontend" in scaffold._compose(cfg, bt, "./services", True, ir)[0]
+    cfg, ir, manifest, bt = _plataforma(tmp_path, "rabbitmq", None)
+    cfg = dataclasses.replace(cfg, platform={"mensajeria": "rabbitmq"})
+    try:
+        scaffold._compose(cfg, bt, "./services", True, ir)
+    except SystemExit as e:
+        assert "Falta decidir el gateway" in str(e) and "nginx" in str(e) and "propio" in str(e)
+    else:
+        raise AssertionError("debía exigir la decisión")
+    assert "  gateway:\n    image: nginx" in scaffold._compose(cfg, bt, "./services", False, ir)[0]     # el humo por dominio es interno

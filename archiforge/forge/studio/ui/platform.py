@@ -11,7 +11,8 @@ from ... import decisions
 from ..service import Studio, StudioError
 from .widgets import Banner
 
-OPCIONES = [("RabbitMQ (broker con colas durables)", "rabbitmq"), ("Relé HTTP en memoria (sin broker)", "memoria")]
+MENSAJERIA = [("RabbitMQ (broker con colas durables)", "rabbitmq"), ("Relé HTTP en memoria (sin broker)", "memoria")]
+GATEWAY = [("nginx (sirve el frontend y enruta hacia los servicios)", "nginx"), ("Propio (sin gateway generado; se documentan las rutas)", "propio")]
 
 
 class PlatformScreen(Screen[bool]):
@@ -28,9 +29,14 @@ class PlatformScreen(Screen[bool]):
             with VerticalScroll(id="form", classes="card"):
                 yield Static("Decisiones de la plataforma", classes="card-title")
                 yield Label("Canal de eventos entre contextos", classes="field-label")
-                yield Select(OPCIONES, value=actual.get("mensajeria") or Select.NULL, prompt="Elige…", allow_blank=True, id="mensajeria")
+                yield Select(MENSAJERIA, value=actual.get("mensajeria") or Select.NULL, prompt="Elige…", allow_blank=True, id="mensajeria")
                 yield Label("¿Por qué este canal?", classes="field-label")
                 yield TextArea((actual.get("justificacion") or {}).get("mensajeria", ""), id="why-mensajeria",
+                               placeholder="Escribe tu argumento propio")
+                yield Label("Gateway", classes="field-label")
+                yield Select(GATEWAY, value=actual.get("gateway") or Select.NULL, prompt="Elige…", allow_blank=True, id="gateway")
+                yield Label("¿Por qué este gateway?", classes="field-label")
+                yield TextArea((actual.get("justificacion") or {}).get("gateway", ""), id="why-gateway",
                                placeholder="Escribe tu argumento propio")
                 yield Banner(id="banner")
                 with Horizontal(classes="buttons"):
@@ -38,7 +44,8 @@ class PlatformScreen(Screen[bool]):
                     yield Button("Cancelar", id="cancel")
             with VerticalScroll(id="why", classes="card"):
                 yield Static("Referencia", classes="card-title")
-                yield Static("\n\n".join(f"[b]{k}[/b]\n{v}" for k, v in decisions.MENSAJERIAS.items()), id="reference")
+                yield Static("[b $primary]Canal de eventos[/]\n\n" + "\n\n".join(f"[b]{k}[/b]\n{v}" for k, v in decisions.MENSAJERIAS.items()) +
+                             "\n\n[b $primary]Gateway[/]\n\n" + "\n\n".join(f"[b]{k}[/b]\n{v}" for k, v in decisions.GATEWAYS.items()), id="reference")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -46,12 +53,14 @@ class PlatformScreen(Screen[bool]):
 
     @on(Button.Pressed, "#save")
     def action_save(self) -> None:
-        valor = self.query_one("#mensajeria", Select).value
-        if valor is Select.NULL:
-            self.query_one(Banner).show("error", "Elige el canal de eventos.")
+        canal, gateway = self.query_one("#mensajeria", Select).value, self.query_one("#gateway", Select).value
+        faltan = [n for n, v in (("el canal de eventos", canal), ("el gateway", gateway)) if v is Select.NULL]
+        if faltan:
+            self.query_one(Banner).show("error", f"Elige {' y '.join(faltan)}.")
             return
         try:
-            self.studio.save_platform(str(valor), self.query_one("#why-mensajeria", TextArea).text)
+            self.studio.save_platform(str(canal), str(gateway), {"mensajeria": self.query_one("#why-mensajeria", TextArea).text,
+                                                                  "gateway": self.query_one("#why-gateway", TextArea).text})
         except StudioError as e:
             self.query_one(Banner).show("error", str(e))
             return

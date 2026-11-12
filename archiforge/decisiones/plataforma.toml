@@ -1,4 +1,6 @@
 mensajeria = "rabbitmq"      # rabbitmq | memoria
+gateway = "nginx"      # nginx | propio
 
 [justificacion]
 mensajeria = "Los eventos entre contextos deben sobrevivir a reinicios y a la caída de un suscriptor."
+gateway = "Un único punto de entrada sirve los microfrontends y enruta hacia los servicios."

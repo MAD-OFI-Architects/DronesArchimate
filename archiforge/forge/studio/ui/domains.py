@@ -95,9 +95,10 @@ class DomainsScreen(Screen):
             ok = line.startswith("✓")
             txt.append(line + "\n", style="#9ece6a" if ok else "#f7768e")
         self.query_one("#rules", Static).update(txt)
-        elegido = cfg.platform.get("mensajeria")
+        canal, gateway = cfg.platform.get("mensajeria"), cfg.platform.get("gateway")
         self.query_one("#platform-text", Static).update(
-            f"Canal de eventos: [b]{elegido}[/b]" if elegido else "[b $warning]Canal de eventos: sin decidir[/]  [dim]· pulsa [b]p[/b] para decidirlo[/]")
+            f"Canal de eventos: [b]{canal or '[b $warning]sin decidir[/]'}[/]\nGateway: [b]{gateway or '[b $warning]sin decidir[/]'}[/]"
+            + ("" if canal and gateway else "\n[dim]pulsa [b]p[/b] para decidirlos[/]"))
         self.query_one("#portfolio").display = bool(rules)         # sin políticas declaradas, el panel no existe
         self.query_one(Banner).clear()
         if not any(r.decided for r in rows):

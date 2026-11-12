@@ -12,6 +12,10 @@ STYLES = ("microservicio", "soa", "monolito-modular")
 DATABASES = ("mongodb", "postgresql")
 DECISION_KEYS = ("lenguaje", "arquitectura", "estilo", "base_de_datos")
 PLATAFORMA = "plataforma"
+GATEWAYS = {
+    "nginx": "un contenedor nginx sirve los microfrontends y enruta /api/<servicio>, /sim y /bus hacia los servicios",
+    "propio": "sin gateway generado: cada servicio publica su puerto y se documentan las rutas que el frontend espera, para configurar el gateway que el equipo elija",
+}
 MENSAJERIAS = {
     "rabbitmq": "los eventos viven en RabbitMQ: colas durables por suscriptor, reintentos con espera y cola de mensajes muertos",
     "memoria": "relé HTTP en memoria: sin broker ni persistencia (los mensajes en vuelo se pierden al reiniciar el bus)",
@@ -119,20 +123,30 @@ def read_platform(cfg: Config) -> dict:
     if not f.exists():
         return {}
     raw = tomllib.loads(f.read_text(encoding="utf-8"))
-    m = raw.get("mensajeria")
-    if m is not None and m not in MENSAJERIAS:
-        raise SystemExit(f"{f.name}: mensajeria «{m}» no existe. Opciones: {', '.join(MENSAJERIAS)}.")
-    return {"mensajeria": m, "justificacion": dict(raw.get("justificacion", {}))}
+    for clave, opciones in (("mensajeria", MENSAJERIAS), ("gateway", GATEWAYS)):
+        v = raw.get(clave)
+        if v is not None and v not in opciones:
+            raise SystemExit(f"{f.name}: {clave} «{v}» no existe. Opciones: {', '.join(opciones)}.")
+    return {"mensajeria": raw.get("mensajeria"), "gateway": raw.get("gateway"), "justificacion": dict(raw.get("justificacion", {}))}
 
 
-def write_platform(cfg: Config, mensajeria: str, why: str = "") -> Path:
-    if mensajeria not in MENSAJERIAS:
-        raise SystemExit(f"mensajeria «{mensajeria}» no existe. Opciones: {', '.join(MENSAJERIAS)}.")
+def write_platform(cfg: Config, mensajeria: str | None = None, gateway: str | None = None, why: dict | None = None) -> Path:
+    """Registra las decisiones de la plataforma; lo que no se pasa conserva su valor anterior."""
+    for clave, valor, opciones in (("mensajeria", mensajeria, MENSAJERIAS), ("gateway", gateway, GATEWAYS)):
+        if valor is not None and valor not in opciones:
+            raise SystemExit(f"{clave} «{valor}» no existe. Opciones: {', '.join(opciones)}.")
+    actual = read_platform(cfg)
+    mensajeria = mensajeria or actual.get("mensajeria")
+    gateway = gateway or actual.get("gateway")
+    razones = {**actual.get("justificacion", {}), **{k: v.strip() for k, v in (why or {}).items() if v.strip()}}
     cfg.decisions_dir.mkdir(parents=True, exist_ok=True)
-    L = ["# Decisiones de la plataforma — las toma el arquitecto; la herramienta ejecuta fiel a esto.",
-         f"mensajeria = {_q(mensajeria)}      # {' | '.join(MENSAJERIAS)}"]
-    if why.strip():
-        L += ["", "[justificacion]", f"mensajeria = {_q(why.strip())}"]
+    L = ["# Decisiones de la plataforma — las toma el arquitecto; la herramienta ejecuta fiel a esto."]
+    if mensajeria:
+        L.append(f"mensajeria = {_q(mensajeria)}      # {' | '.join(MENSAJERIAS)}")
+    if gateway:
+        L.append(f"gateway = {_q(gateway)}      # {' | '.join(GATEWAYS)}")
+    if razones:
+        L += ["", "[justificacion]"] + [f"{k} = {_q(v)}" for k, v in razones.items()]
     path = cfg.decisions_dir / f"{PLATAFORMA}.toml"
     path.write_text("\n".join(L) + "\n", encoding="utf-8")
     cfg.platform = read_platform(cfg)

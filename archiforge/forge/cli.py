@@ -108,12 +108,17 @@ def _context(cfg: config.Config, name: str) -> str:
 
 
 def cmd_platform(cfg: config.Config, a) -> int:
-    if a.messaging:
-        print(f"✔ {decisions.write_platform(cfg, a.messaging, a.why)}")
-    cur = cfg.platform.get("mensajeria")
-    print(f"Canal de eventos: {cur or 'sin decidir'}" + (f" — {decisions.MENSAJERIAS[cur]}" if cur else ""))
-    if not cur:
-        print("Opciones:\n" + "\n".join(f"  · {k}: {v}" for k, v in decisions.MENSAJERIAS.items()))
+    why = {}
+    for item in a.why or []:
+        k, _, v = item.partition("=")
+        why[k.strip()] = v.strip()
+    if a.messaging or a.gateway or why:
+        print(f"✔ {decisions.write_platform(cfg, a.messaging, a.gateway, why)}")
+    for clave, titulo, opciones in (("mensajeria", "Canal de eventos", decisions.MENSAJERIAS), ("gateway", "Gateway", decisions.GATEWAYS)):
+        cur = cfg.platform.get(clave)
+        print(f"{titulo}: {cur or 'sin decidir'}" + (f" — {opciones[cur]}" if cur else ""))
+        if not cur:
+            print("  Opciones:\n" + "\n".join(f"    · {k}: {v}" for k, v in opciones.items()))
     return 0
 
 
@@ -173,7 +178,8 @@ def cmd_domains(cfg: config.Config) -> int:
             print(f"{c['name']:28} {'sí':9} {d.language:8} {d.architecture:12} {d.style:16} {d.database:11} {_domain_status(cfg, d)}")
         else:
             print(f"{c['name']:28} {'—':9} (se simula; decide con `forge decide` para construirlo)")
-    print(f"\nCanal de eventos de la plataforma: {cfg.platform.get('mensajeria') or 'sin decidir (`forge platform`)'}")
+    print(f"\nPlataforma · canal de eventos: {cfg.platform.get('mensajeria') or 'sin decidir'} · gateway: {cfg.platform.get('gateway') or 'sin decidir'}"
+          + ("" if cfg.platform.get("mensajeria") and cfg.platform.get("gateway") else "  (decídelos con `forge platform`)"))
     return 0
 
 
@@ -331,7 +337,8 @@ def main(argv: list[str] | None = None) -> int:
     pt.add_argument("--categoria", help="filtra por categoría (creacional, estructural, comportamiento, dominio, aplicación, integración, persistencia, resiliencia, infraestructura)")
     pl = sub.add_parser("platform", help="registra las decisiones de la plataforma (decisiones/plataforma.toml): el canal de eventos")
     pl.add_argument("--messaging", choices=list(decisions.MENSAJERIAS), help="; ".join(f"{k}: {v}" for k, v in decisions.MENSAJERIAS.items()))
-    pl.add_argument("--why", default="", help="justificación del canal elegido")
+    pl.add_argument("--gateway", choices=list(decisions.GATEWAYS), help="; ".join(f"{k}: {v}" for k, v in decisions.GATEWAYS.items()))
+    pl.add_argument("--why", action="append", metavar="CLAVE=TEXTO", help="justificación (mensajeria o gateway)")
     de = sub.add_parser("decide", help="registra las decisiones del arquitecto para un dominio (decisiones/<dominio>.toml)")
     de.add_argument("name")
     de.add_argument("--lang", choices=list(config.LANGUAGES)); de.add_argument("--arch", choices=list(decisions.ARCHITECTURES))

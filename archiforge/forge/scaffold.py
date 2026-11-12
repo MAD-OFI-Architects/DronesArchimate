@@ -64,6 +64,18 @@ def mensajeria(cfg: Config, bt: dict) -> str:
     return m or "memoria"
 
 
+def gateway(cfg: Config, with_frontend: bool) -> str:
+    """Gateway decidido por el arquitecto. La plataforma de humo por dominio (sin frontend) es interna de la herramienta: siempre nginx."""
+    if not with_frontend:
+        return "nginx"
+    g = cfg.platform.get("gateway")
+    if g is None:
+        from .decisions import GATEWAYS
+        raise SystemExit("Falta decidir el gateway de la plataforma. Decide uno con `python -m forge platform --gateway <opción>`:\n" +
+                         "\n".join(f"  · {k}: {v}" for k, v in GATEWAYS.items()))
+    return g
+
+
 def contract_doc(ir: dict, cfg: Config, manifest: dict, bt: dict) -> str:
     L = ["# Contrato del bus de eventos y de las APIs de interoperabilidad", "",
          "> Contract-first: este documento manda sobre los servicios. Los **campos de cada evento son supuestos de diseño** "
@@ -247,12 +259,33 @@ def _compose(cfg: Config, bt: dict, services_rel: str, with_frontend: bool, ir: 
         L.append(f"  {d.slug}:\n    build: {services_rel}/{d.slug}\n    environment:\n" + "\n".join(f'      {k}: "{v}"' for k, v in env.items()) +
                  f"\n    depends_on:\n      {dep}:\n        condition: service_healthy\n      event-bus:\n        condition: service_healthy")
     deps = "\n      - ".join([d.slug for d in cfg.domains] + ["simulators"])
-    if with_frontend:
+    if gateway(cfg, with_frontend) == "propio":
+        # sin gateway generado: cada servicio publica su puerto para que el gateway del equipo los enrute
+        for d in cfg.domains:
+            i = next(i for i, x in enumerate(L) if x.startswith(f"  {d.slug}:\n"))
+            L[i] = L[i].replace("\n    environment:", f"\n    ports:\n      - \"{d.port}:{d.port}\"\n    environment:", 1)
+    elif with_frontend:
         L.append(f"  gateway:\n    build: ./frontend\n    ports:\n      - \"${{GATEWAY_PORT:-{GATEWAY_PORT}}}:80\"\n    depends_on:\n      - {deps}")
     else:      # smoke por dominio: solo el proxy; el microfrontend se verifica con su propio build y pruebas
         L.append(f"  gateway:\n    image: nginx:1.27-alpine\n    volumes:\n      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro\n    ports:\n      - \"${{GATEWAY_PORT:-{GATEWAY_PORT}}}:80\"\n    depends_on:\n      - {deps}")
     sql = "\n".join(f"CREATE DATABASE {d.slug.replace('-', '_')};" for d in cfg.domains if d.database == "postgresql") + "\n"
     return "\n".join(L) + "\n", sql
+
+
+def gateway_doc(cfg: Config) -> str:
+    """Rutas que el frontend y las demás piezas esperan, para quien configure su propio gateway."""
+    L = ["# Rutas del gateway", "",
+         "El generador no incluye gateway: el equipo configura el suyo (Kong, Traefik, un balanceador de la nube, etc.) con estas rutas.", "",
+         "## Hacia los servicios", "", "| Ruta pública | Destino |", "|---|---|"]
+    for d in cfg.domains:
+        L.append(f"| `/api/{kebab(d.context).split('-')[0]}/…` | `http://{d.slug}:{d.port}/api/…` (puerto publicado: `{d.port}`) |")
+    L += [f"| `/sim/…` | `http://simulators:{SIM_PORT}/` |", f"| `/bus/…` | `http://event-bus:{BUS_PORT}/` |", "",
+          "## Frontend", "",
+          "Cada microfrontend se construye con `npm run build` en su carpeta (`frontend/mfe-*`). El gateway o un servidor estático debe servir:", "",
+          "- `/` → `frontend/mfe-shell/dist` (con `index.html` como respaldo de las rutas de la aplicación).",
+          "- `/mfe/<etiqueta>/<etiqueta>.js` → `frontend/<etiqueta>/dist/<etiqueta>.js` de cada remote.",
+          "- `/mfe-manifest.json` → el del shell.", ""]
+    return "\n".join(L)
 
 
 def _nginx(cfg: Config) -> str:
@@ -503,6 +536,17 @@ boot();
 """
 
 
+DOCKERFILE_FRONTEND = """FROM node:22-alpine AS build
+WORKDIR /app
+COPY . .
+RUN for d in mfe-*; do (cd $d && npm install --no-audit --no-fund && npm run build) || exit 1; done
+FROM nginx:1.27-alpine
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/mfe-shell/dist /usr/share/nginx/html
+{copies}
+"""
+
+
 def scaffold_shell(cfg: Config) -> list[str]:
     """Shell + Dockerfile del gateway; descubre los remotes presentes en out/frontend/*/mfe.json (los que haya construido cualquier equipo)."""
     fe = cfg.out / "frontend"
@@ -527,22 +571,16 @@ def scaffold_shell(cfg: Config) -> list[str]:
     (sh / "public" / "mfe-manifest.json").write_text(json.dumps(
         [{"tag": m["tag"], "context": m["context"], "roles": m["roles"], "module": f"/mfe/{m['tag']}/{m['tag']}.js"} for m in metas],
         indent=2, ensure_ascii=False), encoding="utf-8")
-    copies = "\n".join(f"COPY --from=build /app/{m['tag']}/dist /usr/share/nginx/html/mfe/{m['tag']}" for m in metas)
-    (fe / "Dockerfile").write_text(f"""FROM node:22-alpine AS build
-WORKDIR /app
-COPY . .
-RUN for d in mfe-*; do (cd $d && npm install --no-audit --no-fund && npm run build) || exit 1; done
-FROM nginx:1.27-alpine
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/mfe-shell/dist /usr/share/nginx/html
-{copies}
-""", encoding="utf-8")
+    if gateway(cfg, True) == "nginx":
+        copies = "\n".join(f"COPY --from=build /app/{m['tag']}/dist /usr/share/nginx/html/mfe/{m['tag']}" for m in metas)
+        (fe / "Dockerfile").write_text(DOCKERFILE_FRONTEND.format(copies=copies), encoding="utf-8")
     (fe / ".dockerignore").write_text("**/node_modules\n**/dist\n",
                                       encoding="utf-8")
-    (fe / "nginx.conf").write_text(_nginx(cfg), encoding="utf-8")
+    if gateway(cfg, True) == "nginx":
+        (fe / "nginx.conf").write_text(_nginx(cfg), encoding="utf-8")
     (fe / "README.md").write_text("# Microfrontends\n\nShell + un remote por **dominio** (Web Components); el shell filtra por rol. "
                                   "Cada remote lo construye el equipo dueño del dominio.\n", encoding="utf-8")
-    return ["frontend/mfe-shell", "frontend/Dockerfile", "frontend/.dockerignore", "frontend/nginx.conf"]
+    return ["frontend/mfe-shell", "frontend/.dockerignore"] + (["frontend/Dockerfile", "frontend/nginx.conf"] if gateway(cfg, True) == "nginx" else [])
 
 
 # ----------------------------------------------------------------------------- instrucciones de proyecto
@@ -595,7 +633,10 @@ def platform(cfg: Config, ir: dict, manifest: dict, target: Path, services_rel: 
                                      "\n".join(f"- **{s['context']}**: emite {s['emits'] or '—'}, se suscribe a {s['subscribes'] or '—'}, APIs {s['sync_apis'] or '—'}" for s in manifest["simulated"]) + "\n")
     compose, sql = _compose(cfg, bt, services_rel, with_frontend, ir)
     files["docker-compose.yml"], files["init-postgres.sql"] = compose, sql
-    files["nginx.conf"] = _nginx(cfg)
+    if gateway(cfg, with_frontend) == "propio":
+        files["docs/gateway-rutas.md"] = gateway_doc(cfg)
+    else:
+        files["nginx.conf"] = _nginx(cfg)
     for rel, text in files.items():
         p = target / rel
         p.parent.mkdir(parents=True, exist_ok=True)
