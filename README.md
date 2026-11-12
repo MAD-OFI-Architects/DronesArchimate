@@ -5,6 +5,8 @@
 > **Regla de uso de IA:** la IA participó únicamente como experto del negocio simulado (entrevista, Fase 0). La selección y el diseño de capacidades, dominios, agregados, contextos y vistas son elaboración del equipo.
 > **Verificación del modelo:** el modelo se abre en Archi 5.9, fue validado con el validador de la herramienta y las relaciones marcadas fueron corregidas.
 
+> **Manual completo (para entender, usar y exponer el proyecto):** [`docs/manual/`](docs/manual/README.md) — qué es, cómo se organiza el modelo ArchiMate, cómo funciona el programa, guía de uso, topología del producto, justificación de tecnologías y patrones, calidad y preguntas frecuentes.
+
 ## Índice
 1. [Contexto y entrevista](#1-contexto-y-entrevista)
 2. [Motivación](#2-motivación)
