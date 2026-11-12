@@ -123,6 +123,18 @@ public class OrdenDeTrabajoHttpTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AsignarTecnicoComando_con_Habilitacion_caida_responde_503_y_no_500()
+    {
+        var id = await AbrirAsync();
+        _servidor.Habilitacion.NoDisponible = true;
+
+        var respuesta = await PostAsync(id, "asignar-tecnico", new { tecnico = "Ana" });
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, respuesta.StatusCode);
+        Assert.Equal("Habilitación de Personal", (await respuesta.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("dependencia").GetString());
+    }
+
+    [Fact]
     public async Task AsignarTecnicoComando_no_habilitado_responde_422()
     {
         var id = await AbrirAsync();

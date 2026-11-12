@@ -67,7 +67,11 @@ public sealed class ServidorDeIntervenciones : IAsyncDisposable
     {
         public bool Habilitado { get; set; } = true;
 
+        public bool NoDisponible { get; set; }
+
         public Task<bool> EstaHabilitadoAsync(string tecnico, CancellationToken cancellationToken = default) =>
-            Task.FromResult(Habilitado);
+            NoDisponible
+                ? throw new BuildingBlocks.Application.Excepciones.DependenciaNoDisponibleException("Habilitación de Personal", "No responde.")
+                : Task.FromResult(Habilitado);
     }
 }

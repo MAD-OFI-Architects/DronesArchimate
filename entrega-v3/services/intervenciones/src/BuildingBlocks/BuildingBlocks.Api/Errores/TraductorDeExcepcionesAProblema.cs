@@ -19,6 +19,8 @@ public static class TraductorDeExcepcionesAProblema
         BusinessRuleViolationException ex => Problema(StatusCodes.Status422UnprocessableEntity, "Regla de negocio incumplida",
             ex.Message, ("regla", ex.BrokenRule.GetType().Name), ("codigo", CodigoDelContrato(ex.Message))),
         DomainException ex => Problema(StatusCodes.Status400BadRequest, "Dato inválido para el dominio", ex.Message),
+        DependenciaNoDisponibleException ex => Problema(StatusCodes.Status503ServiceUnavailable, "Dependencia no disponible",
+            ex.Message, ("dependencia", ex.Dependencia)),
         ConflictoDeConcurrenciaException ex => Problema(StatusCodes.Status409Conflict, "Conflicto de concurrencia", ex.Message),
         _ => Problema(StatusCodes.Status500InternalServerError, "Error interno", "Ocurrió un error inesperado.")
     };

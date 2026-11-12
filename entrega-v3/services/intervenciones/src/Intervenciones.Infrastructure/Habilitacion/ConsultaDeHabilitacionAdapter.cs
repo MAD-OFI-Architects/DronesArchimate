@@ -1,10 +1,12 @@
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
+using BuildingBlocks.Application.Excepciones;
 using Intervenciones.Application.Puertos;
 
 namespace Intervenciones.Infrastructure.Habilitacion;
 
-public sealed class HabilitacionNoDisponibleException(string mensaje, Exception? interna = null) : Exception(mensaje, interna);
+public sealed class HabilitacionNoDisponibleException(string mensaje, Exception? interna = null)
+    : DependenciaNoDisponibleException("Habilitación de Personal", mensaje, interna);
 
 /// <summary>Capa anticorrupción hacia Habilitación de Personal: llama a su API y traduce la respuesta externa
 /// a un sí/no; el dominio nunca ve el formato del otro contexto.</summary>

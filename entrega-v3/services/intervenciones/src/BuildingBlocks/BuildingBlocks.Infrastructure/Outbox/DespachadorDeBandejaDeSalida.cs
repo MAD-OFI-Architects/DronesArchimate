@@ -44,6 +44,8 @@ public sealed class DespachadorDeBandejaDeSalida(
                 var intento = mensaje.Intentos + 1;
                 logger.LogWarning(ex, "No se pudo publicar {Topico} ({Id}); intento {Intento}", mensaje.Topico, mensaje.Id, intento);
                 await almacen.RegistrarIntentoFallidoAsync(mensaje.Id, ex.Message, reloj.Now + Espera(intento), cancellationToken);
+                if (intento >= opciones.MaximoDeIntentos)
+                    logger.LogError("El mensaje {Topico} ({Id}) agotó sus {Intentos} intentos y no se volverá a publicar sin intervención", mensaje.Topico, mensaje.Id, intento);
             }
         }
 

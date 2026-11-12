@@ -38,6 +38,18 @@ public class DespachadorDeBandejaDeSalidaTests
         return (almacen, mensaje);
     }
 
+    private sealed class LoggerQueRegistra<T> : Microsoft.Extensions.Logging.ILogger<T>
+    {
+        public List<(Microsoft.Extensions.Logging.LogLevel Nivel, string Texto)> Entradas { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState estado) where TState : notnull => null;
+
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel nivel) => true;
+
+        public void Log<TState>(Microsoft.Extensions.Logging.LogLevel nivel, Microsoft.Extensions.Logging.EventId id, TState estado, Exception? ex, Func<TState, Exception?, string> formato) =>
+            Entradas.Add((nivel, formato(estado, ex)));
+    }
+
     private static DespachadorDeBandejaDeSalida Crear(AlmacenDeDocumentosEnMemoria almacen, IBusDeEventos bus, RelojSimulado reloj, int maximo = 10) =>
         new(almacen, bus, reloj, new OpcionesDeDespacho { MaximoDeIntentos = maximo }, NullLogger<DespachadorDeBandejaDeSalida>.Instance);
 
@@ -96,5 +108,24 @@ public class DespachadorDeBandejaDeSalidaTests
         }
 
         Assert.Equal(2, almacen.MensajesDeSalida.Single().Intentos);
+    }
+
+    [Fact]
+    public async Task Al_agotar_los_intentos_lo_deja_como_error_para_que_no_se_pierda_en_silencio()
+    {
+        var (almacen, mensaje) = await ConUnMensajeAsync();
+        var log = new LoggerQueRegistra<DespachadorDeBandejaDeSalida>();
+        var reloj = new RelojSimulado(Escenario.Inicio);
+        var despachador = new DespachadorDeBandejaDeSalida(almacen, new BusQueFalla(int.MaxValue), reloj, new OpcionesDeDespacho { MaximoDeIntentos = 2 }, log);
+
+        for (var i = 0; i < 4; i++)
+        {
+            await despachador.DespacharPendientesAsync();
+            reloj.Avanzar(TimeSpan.FromMinutes(1));
+        }
+
+        var error = Assert.Single(log.Entradas, e => e.Nivel == Microsoft.Extensions.Logging.LogLevel.Error);
+        Assert.Contains(mensaje.Id.ToString(), error.Texto);
+        Assert.Contains("agotó", error.Texto);
     }
 }

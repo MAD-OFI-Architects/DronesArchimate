@@ -14,5 +14,5 @@ public sealed class OrdenDeTrabajoCerradaTraductor : TraductorDeEventoDeDominio<
         evento.DronId,
         evento.OcurrioEn,
         evento.HorasHombre,
-        evento.Consumos.Select(c => new ConsumoCerradoV1(c.Referencia, c.Cantidad, c.NumeroDeSerie)).ToList());
+        evento.Consumos.Select(c => new ConsumoCerradoV1(c.Referencia, c.Cantidad, c.NumeroDeSerie, c.SerieRetirada, c.HoraDeCorte)).ToList());
 }

@@ -21,6 +21,9 @@ public class ProblemDetailsTests
         Assert.Equal(400, TraductorDeExcepcionesAProblema.Traducir(new DomainException("dato")).Status);
         Assert.Equal(404, TraductorDeExcepcionesAProblema.Traducir(new RecursoNoEncontradoException("la orden", 1)).Status);
         Assert.Equal(409, TraductorDeExcepcionesAProblema.Traducir(new ConflictoDeConcurrenciaException("choque")).Status);
+        var caida = TraductorDeExcepcionesAProblema.Traducir(new DependenciaNoDisponibleException("Habilitación", "no responde"));
+        Assert.Equal(503, caida.Status);
+        Assert.Equal("Habilitación", caida.Extensions["dependencia"]);
         Assert.Equal(422, TraductorDeExcepcionesAProblema.Traducir(new BusinessRuleViolationException(new DepositoDebeSerPositivo(0))).Status);
         Assert.Equal(500, TraductorDeExcepcionesAProblema.Traducir(new InvalidOperationException("secreto")).Status);
     }

@@ -226,6 +226,23 @@ public class ComandosTests
     }
 
     [Fact]
+    public async Task La_orden_cerrada_informa_instalaciones_y_retiros_con_su_hora_de_corte()
+    {
+        var (e, id) = await ConOrdenAsync();
+        await using var _ = e;
+        await EjecutarAsync(e, id);
+        await e.EnviarAsync(new RegistrarConsumoDeRepuestoComando(id, Guid.NewGuid(), "BAT-22K", 1, true, "BAT-0377", "BAT-0412", 112.5m));
+        await e.EnviarAsync(new LiberarDronComando(id, Guid.NewGuid(), "Beto"));
+
+        await e.EnviarAsync(new CerrarOrdenDeTrabajoComando(id));
+
+        var contrato = System.Text.Json.JsonSerializer.Deserialize<OrdenDeTrabajoCerradaV1>(
+            Assert.Single(e.Almacen.MensajesDeSalida).PayloadJson, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
+        var consumo = Assert.Single(contrato.Consumos);
+        Assert.Equal(("BAT-22K", 1, "BAT-0412", "BAT-0377", 112.5m), (consumo.Referencia, consumo.Cantidad, consumo.NumeroSerie, consumo.SerieRetirada, consumo.HoraDeCorte));
+    }
+
+    [Fact]
     public async Task Cerrada_la_orden_rechaza_cualquier_modificacion()
     {
         var (e, id) = await ConOrdenAsync();

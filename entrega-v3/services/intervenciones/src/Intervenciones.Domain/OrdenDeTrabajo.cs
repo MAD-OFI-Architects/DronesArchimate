@@ -130,7 +130,7 @@ public sealed class OrdenDeTrabajo : AggregateRoot<Guid>, IOriginador<OrdenDeTra
         CerradaEn = Guard.NoPorDefecto(ahora, nameof(ahora));
         Estado = siguiente;
         var consumos = _consumos
-            .Select(c => new ConsumoCerrado(c.Referencia, c.Cantidad, c.SerieInstalada, c.HoraDeCorte?.Horas))
+            .Select(c => new ConsumoCerrado(c.Referencia, c.Cantidad, c.SerieInstalada, c.SerieRetirada, c.HoraDeCorte?.Horas))
             .ToList();
         Raise(new OrdenDeTrabajoCerrada(Id, ParadaId, DronId, HorasHombreTotales?.Valor ?? 0m, consumos, ahora));
     }
