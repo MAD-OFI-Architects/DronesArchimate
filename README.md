@@ -5,9 +5,153 @@
 > **Regla de uso de IA:** la IA participó únicamente como experto del negocio simulado (entrevista, Fase 0). La selección y el diseño de capacidades, dominios, agregados, contextos y vistas son elaboración del equipo.
 > **Verificación del modelo:** el modelo se abre en Archi 5.9, fue validado con el validador de la herramienta y las relaciones marcadas fueron corregidas.
 
-> **Manual completo (para entender, usar y exponer el proyecto):** [`docs/manual/`](docs/manual/README.md) — qué es, cómo se organiza el modelo ArchiMate, cómo funciona el programa, guía de uso, topología del producto, justificación de tecnologías y patrones, calidad y preguntas frecuentes.
+> **Sobre el uso de IA:** en el **diseño** la IA actuó solo como experto del negocio simulado (ver la regla de arriba). En la **construcción del producto**, un agente de IA escribe el código por etapas, siempre dentro de las decisiones del arquitecto y de compuertas automáticas de verificación (ver `archiforge/`).
 
-## Índice
+---
+
+# Qué hay en este repositorio
+
+Este repositorio contiene **tres cosas que se encadenan**, más la documentación que las explica:
+
+```
+   diseno/                     archiforge/                       entrega-v3/
+   EL PLANO                    EL CONSTRUCTOR                    EL PRODUCTO
+ ┌──────────────────┐        ┌────────────────────────┐        ┌─────────────────────────────┐
+ │ Modelo ArchiMate │  ───►  │ Lee el modelo, el      │  ───►  │ 2 servicios que funcionan   │
+ │ + análisis de    │        │ arquitecto decide las  │        │ + bus de eventos (RabbitMQ) │
+ │   6 fases        │        │ tecnologías y un agente│        │ + gateway + pantallas web   │
+ │ (qué necesita el │        │ de IA escribe el código│        │ + datos de demostración     │
+ │  negocio)        │        │ bajo compuertas        │        │ + documentación por servicio│
+ └──────────────────┘        └────────────────────────┘        └─────────────────────────────┘
+        ▲                                                                     
+        └───────────  docs/manual/  explica todo lo anterior para quien no es técnico  ────────┘
+```
+
+| Carpeta | Qué es | Para quién |
+|---|---|---|
+| [`diseno/`](diseno/) | **El plano:** el modelo ArchiMate y los análisis de las 6 fases del diseño | Quien quiera entender el negocio y las decisiones de diseño |
+| [`archiforge/`](archiforge/README.md) | **El constructor:** el programa que lee el modelo y construye el software (con una pantalla de terminal, la TUI) | Quien quiera construir o reconstruir servicios |
+| [`entrega-v3/`](entrega-v3/README.md) | **El producto:** lo que se construyó, listo para ejecutar con Docker | Quien quiera ver funcionando el sistema |
+| [`docs/`](docs/) | **La documentación:** el manual completo, las decisiones de diseño y las guías | Todos |
+| [`odd/`](odd/tasks/) | **Las bitácoras** de cada bloque de trabajo (qué se pidió, qué se hizo, qué se verificó) | Quien quiera auditar cómo se trabajó |
+
+## Por dónde empezar
+
+| Si querés… | Hacé esto |
+|---|---|
+| **Entender el proyecto sin tecnicismos** | Leé el **[manual](docs/manual/README.md)** (empezá por el documento 01) |
+| **Ver el sistema funcionando** (5 minutos, solo Docker) | `cd entrega-v3 && docker compose up -d --build --wait && python3 seed/seed.py` y abrí `http://localhost:8080` (detalle en el [doc 04 del manual](docs/manual/04-guia-de-uso.md)) |
+| **Entender el modelo de negocio** | Leé el diseño más abajo en este README, o abrí `diseno/modelo/drones-mantenimiento.archimate` con **Archi** |
+| **Usar el constructor** | `cd archiforge && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/python -m forge studio` |
+| **Correr las pruebas** | `cd archiforge && .venv/bin/python -m pytest tests` (el programa) · `cd entrega-v3/services/intervenciones && dotnet test` · `cd entrega-v3/services/repuestos-del-taller && PYTHONPATH=src python -m pytest` (requiere `fastapi`, `httpx` y `cryptography`) |
+| **Preparar la exposición** | Manual: [preguntas frecuentes](docs/manual/09-preguntas-frecuentes.md), [decisiones por servicio](docs/manual/11-decisiones-por-servicio.md) y [límites conocidos](docs/manual/08-calidad-y-pruebas.md) |
+
+## Mapa completo del repositorio
+
+```text
+DronesArchimate/
+│
+├── README.md                          ← este documento (mapa + diseño del negocio)
+│
+├── diseno/                            ══ EL PLANO ══
+│   ├── modelo/
+│   │   ├── drones-mantenimiento.archimate   ← EL modelo: 812 elementos, 1.350 relaciones, 32 vistas
+│   │   └── por_fase/                        ← el mismo modelo guardado fase por fase (Fase01…Fase06)
+│   ├── vistas/                              ← 33 imágenes (PNG) de las vistas del modelo
+│   ├── Fase00/  entrevista al experto: guion, rol, conversación, entrevista organizada, análisis de hallazgos
+│   ├── Fase01/  motivación, mapa de capacidades, cadena de valor E2E
+│   ├── Fase02/  inclusión/exclusión, ACL, descomposición de servicios, contratos de servicio
+│   ├── Fase03/  ecosistema, event storming, lenguaje ubicuo, dominios
+│   ├── Fase04/  criterios de diseño y agregados
+│   ├── Fase05/  mapa de contextos y coherencia de las ACL
+│   └── Fase06/  investigación del canvas, trazabilidad, canvas
+│
+├── archiforge/                        ══ EL CONSTRUCTOR ══
+│   ├── forge/                               ← el programa
+│   │   ├── archimate.py, manifest.py            lector del modelo → resumen (IR) → lista de lo que debe existir
+│   │   ├── stages.py, runner.py                 las etapas y su orquestador (reintentos, estado, commits)
+│   │   ├── gates.py, conformance.py, solid.py   las compuertas de verificación
+│   │   ├── decisions.py, cambios.py             decisiones del arquitecto y detección de cambios
+│   │   ├── scaffold.py, skeletons/              generación determinista: bus, simuladores, compose, esqueletos
+│   │   ├── agents.py, agentdefs.py              conexión con los agentes de IA (Claude Code, OpenCode)
+│   │   ├── cli.py                               la línea de comandos (`python -m forge …`)
+│   │   └── studio/                              la pantalla de terminal (TUI)
+│   ├── prompts/                             ← las instrucciones (plantillas) que recibe el agente en cada etapa
+│   │   └── guias/                               guías por decisión: arquitectura, estilo de servicio y SOLID
+│   ├── catalog/                             ← catálogo de 50 patrones de diseño (explicados, sin recomendar)
+│   ├── decisiones/                          ← LAS DECISIONES DEL ARQUITECTO: un archivo por servicio + plataforma.toml
+│   ├── config/event-payloads.json           ← ajustes opcionales de los campos de los eventos
+│   ├── reference/                           ← guía DDD de referencia usada como insumo
+│   ├── docs/                                ← guía de ejecución e investigación del generador
+│   ├── scripts/                             ← build.sh / build.ps1 (atajos de construcción)
+│   ├── tools/                               ← fake_agent.py (agente simulado para pruebas sin gastar IA) y utilidades
+│   ├── tests/                               ← las pruebas del programa
+│   ├── forge.toml                           ← configuración del proyecto (insumos, motor de IA, políticas del equipo)
+│   ├── forge.claude.toml, forge.dryrun.toml ← variantes: usar Claude Code / ensayo completo con agente simulado
+│   └── README.md, README-archiforge.md      ← documentación del programa
+│
+├── entrega-v3/                        ══ EL PRODUCTO ══
+│   ├── docker-compose.yml                   ← levanta los 8 contenedores (gateway, 2 servicios, bus, RabbitMQ, simuladores, 2 bases)
+│   ├── services/
+│   │   ├── intervenciones/                      servicio de órdenes de trabajo: C# · Clean + DDD · MongoDB
+│   │   └── repuestos-del-taller/                servicio del almacén: Python · Hexagonal · PostgreSQL
+│   ├── frontend/
+│   │   ├── mfe-shell/                           el panel que carga las pantallas según el rol
+│   │   ├── mfe-intervenciones/                  pantallas de Intervenciones (Web Component)
+│   │   └── mfe-repuestos-del-taller/            pantallas de Repuestos (Web Component)
+│   ├── event-bus/                           ← puente de eventos sobre RabbitMQ (+ topics.json: el catálogo de tópicos)
+│   ├── simulators/                          ← los contextos no construidos, simulados
+│   ├── seed/                                ← datos de demostración (script idempotente + sus pruebas)
+│   ├── docs/                                ← por servicio: decisiones (ADR), trazabilidad, conformidad, verificación, supuestos; y el contrato del bus
+│   ├── .platform/                           ← plataformas de humo por servicio (artefactos de verificación que genera el programa)
+│   ├── nginx.conf, init-postgres.sql        ← configuración del gateway y de las bases
+│   └── README.md, AGENTS.md, CLAUDE.md      ← documentación del producto e instrucciones para agentes
+│
+├── docs/                              ══ DOCUMENTACIÓN ══
+│   ├── manual/                              ← EL MANUAL: 11 documentos + índice, con diagramas
+│   ├── decisiones.md                        ← decisiones de diseño del negocio (D-01…D-18) y supuestos (S-01…S-11)
+│   ├── convenciones.md                      ← convenciones de nombres y etiquetado del modelo
+│   ├── guia-ejecucion-v3.md                 ← guía paso a paso de la ejecución del generador
+│   └── curso/                               ← material del curso (evaluación)
+│
+└── odd/tasks/                         ← bitácoras de trabajo (una por bloque de cambios)
+```
+
+## Cómo se relacionan las partes (flujo de trabajo)
+
+```
+  1. DISEÑAR            2. DECIDIR                 3. CONSTRUIR                  4. PROBAR
+  ──────────            ──────────                 ────────────                  ─────────
+  Archi → modelo   ─►   TUI o `forge decide`  ─►   `forge build` (agente   ─►    `docker compose up`
+  (diseno/)             (archiforge/decisiones/)   + compuertas) y               (entrega-v3/)
+                                                    `forge assemble`
+                                                    → archiforge/out/
+```
+
+- **`archiforge/out/`** (no se versiona) es donde el programa deja lo que construye. **`entrega-v3/`** es el producto entregado: se generó con el programa y
+  luego se corrigió y documentó a mano (el manual cuenta qué se corrigió y por qué).
+- Si cambia el modelo o una decisión, volver a construir **reconstruye solo lo afectado**.
+
+## Los documentos más importantes
+
+| Documento | Qué responde |
+|---|---|
+| [`docs/manual/README.md`](docs/manual/README.md) | Todo el proyecto explicado para no técnicos, con índice de lectura |
+| [`docs/manual/02-el-modelo-archimate.md`](docs/manual/02-el-modelo-archimate.md) | Cómo debe estar etiquetado un modelo para que el programa lo entienda |
+| [`docs/manual/05-el-producto-generado.md`](docs/manual/05-el-producto-generado.md) | Topología del producto y cómo se comunican los servicios |
+| [`docs/manual/06-justificacion-de-tecnologias.md`](docs/manual/06-justificacion-de-tecnologias.md) | Por qué cada tecnología y por qué no otras |
+| [`docs/manual/07-justificacion-de-patrones.md`](docs/manual/07-justificacion-de-patrones.md) | Por qué cada patrón y por qué no los otros |
+| [`docs/manual/11-decisiones-por-servicio.md`](docs/manual/11-decisiones-por-servicio.md) | Las decisiones de cada servicio con su justificación real |
+| [`docs/manual/08-calidad-y-pruebas.md`](docs/manual/08-calidad-y-pruebas.md) | Qué se probó, qué falló y los límites conocidos |
+| [`entrega-v3/docs/contrato-bus.md`](entrega-v3/docs/contrato-bus.md) | El contrato de los eventos entre servicios |
+
+---
+
+# El diseño del negocio (Fases 0 a 6)
+
+El resto de este documento es el **diseño de la solución**, fase por fase, con sus vistas ArchiMate.
+
+## Índice del documento de diseño
 1. [Contexto y entrevista](#1-contexto-y-entrevista)
 2. [Motivación](#2-motivación)
 3. [Mapa de capacidades y proceso E2E](#3-mapa-de-capacidades-y-proceso-e2e)
@@ -19,20 +163,6 @@
 9. [Decisiones, supuestos y trazabilidad](#9-decisiones-supuestos-y-trazabilidad)
 
 Tabla de aportes: [ver al final](#tabla-de-aportes).
-
-> **Entrega final (V3).** El producto generado desde este modelo está en [`entrega-v3/`](entrega-v3/README.md) —dos dominios reales, contextos simulados y microfrontends— y el generador usado en [`archiforge/`](archiforge/README.md). El paso a paso está en [`docs/guia-ejecucion-v3.md`](docs/guia-ejecucion-v3.md).
-
-## Estructura del repositorio
-```text
-/
-├── README.md                       ← este documento
-├── diseno/Fase00/                         ← entrevista al experto (guion, rol, conversación, análisis de hallazgos)
-├── diseno/Fase01/ … diseno/Fase06/               ← análisis y tablas de cada fase (enlazados abajo)
-├── docs/                           ← convenciones y decisiones
-├── diseno/modelo/
-│   └── drones-mantenimiento.archimate   ← UN solo modelo con todas las vistas
-└── diseno/vistas/                         ← V01 … V11 (con subvistas) exportadas como PNG
-```
 
 ## 1. Contexto y entrevista
 **Solicitud (Tema 1):** «Somos una empresa que presta servicios de fumigación de cultivos con una flota de drones. Necesitamos un software que apoye nuestro proceso de mantenimiento preventivo para mantener la flota disponible, segura y dentro de la normatividad aeronáutica». Alcance: horas y ciclos por dron, despiece con condiciones (horas, ciclos, calendario, estado), repuestos y consumibles por cambio, plan que programe las intervenciones e indicadores (disponibilidad, cumplimiento del plan, MTBF, costo por hora).
@@ -165,7 +295,7 @@ Tabla de aportes: [ver al final](#tabla-de-aportes).
 **Análisis.** Canvas de *Plan de Mantenimiento* (core más rico) en una página, con elementos reales del modelo. **Argumentación.** Opción A (vista con rejilla de groupings); la investigación y la verificación en Archi están en [`diseno/Fase06/01_investigacion_canvas.md`](diseno/Fase06/01_investigacion_canvas.md); contenido en [`03_canvas`](diseno/Fase06/03_canvas.md).
 
 ## 9. Decisiones, supuestos y trazabilidad
-Dieciocho decisiones (D-01 a D-18) y ocho supuestos (S-01 a S-08) con alternativas, razón, riesgo y hallazgo en [`docs/decisiones.md`](docs/decisiones.md).
+Dieciocho decisiones (D-01 a D-18) y once supuestos (S-01 a S-11) con alternativas, razón, riesgo y hallazgo en [`docs/decisiones.md`](docs/decisiones.md).
 
 ![V10](diseno/vistas/V10_trazabilidad_vertical.png)
 

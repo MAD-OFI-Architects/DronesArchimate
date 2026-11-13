@@ -14,7 +14,7 @@ No hace falta volver a ejecutar el generador para levantar el producto: todo lo 
 | **Intervenciones** | C# (.NET 8) | Clean Architecture + DDD | MongoDB (replica set) | 10 |
 | **Repuestos del Taller** | Python (FastAPI) | Hexagonal | PostgreSQL | 7 |
 
-Los demás contextos del modelo están **simulados** y se comunican por el bus de eventos.
+Los demás contextos del modelo están **simulados**. Los servicios se comunican por **eventos** a través de un bus respaldado por **RabbitMQ** (colas durables, reintentos y cola de mensajes muertos); solo las consultas puntuales (habilitación y avisos) son llamadas directas. Explicación completa en el [manual](../docs/manual/README.md).
 
 ## Requisitos
 
@@ -29,7 +29,9 @@ cd entrega-v3
 GATEWAY_PORT=8080 docker compose up --build --wait
 ```
 
-Gateway: `http://localhost:8080`
+Gateway: `http://localhost:8080` · Consola de RabbitMQ: `http://localhost:15672` (usuario y clave `guest`; cambiable con `RABBITMQ_UI_PORT`).
+
+Son **8 contenedores**: gateway, intervenciones, repuestos-del-taller, event-bus, rabbitmq, simulators, mongo y postgres.
 
 | Ruta | Destino |
 |---|---|
@@ -41,6 +43,9 @@ Gateway: `http://localhost:8080`
 | `/sim/simulate/<contexto>/<evento>` | Simuladores publican un evento |
 | `/sim/received` | Eventos recibidos por los simuladores |
 | `/sim/health` | Salud de los simuladores |
+| `/bus/health` | Estado del bus (debe decir `rabbitmq`) |
+| `/bus/dlq` | Mensajes que no se pudieron entregar, por cola |
+| `/bus/dlq/reprocesar` (POST) | Devuelve los mensajes muertos a su cola |
 
 Apagar:
 
@@ -83,7 +88,7 @@ Usan puertos propios para no chocar entre sí.
 
 ```text
 entrega-v3/
-├── docker-compose.yml        plataforma completa (2 dominios reales + simuladores + gateway)
+├── docker-compose.yml        plataforma completa (2 dominios reales + bus + RabbitMQ + simuladores + gateway)
 ├── nginx.conf                proxy del gateway ensamblado
 ├── init-postgres.sql         base de datos PostgreSQL de Repuestos
 ├── services/
@@ -95,8 +100,9 @@ entrega-v3/
 │   ├── mfe-shell/            host que integra los remotes
 │   ├── mfe-intervenciones/   Web Component de Intervenciones
 │   └── mfe-repuestos-del-taller/
-├── event-bus/                bus de eventos por tópicos
+├── event-bus/                puente de eventos sobre RabbitMQ (tópicos, reintentos, cola de mensajes muertos)
 ├── simulators/               contextos no implementados
+├── seed/                     datos de demostración (idempotente)
 ├── .platform/                plataformas de humo aisladas por dominio
 └── docs/                     ADR, trazabilidad, contrato del bus, verificación
 ```
@@ -110,6 +116,15 @@ entrega-v3/
 - `docs/contrato-bus.md` — contrato de eventos y APIs de interoperabilidad
 
 El paso a paso completo del proceso está en [`../docs/guia-ejecucion-v3.md`](../docs/guia-ejecucion-v3.md).
+
+## Límites conocidos
+
+Resumen (el detalle y cómo se corregirían está en [`../docs/manual/08-calidad-y-pruebas.md`](../docs/manual/08-calidad-y-pruebas.md)):
+
+- **Repuestos debe correr como una sola instancia**: con dos réplicas se pierden reservas (comprobado; falta control de versión en el guardado).
+- El outbox de Repuestos es durable pero no comparte transacción con el agregado; el de Intervenciones sí.
+- El bus no valida el contenido de los eventos contra el contrato.
+- No hay autenticación en el gateway ni entre servicios; el filtro por rol es solo de interfaz.
 
 ## Nota sobre seguridad
 
